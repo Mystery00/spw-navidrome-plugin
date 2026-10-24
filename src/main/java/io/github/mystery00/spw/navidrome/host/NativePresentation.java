@@ -2,7 +2,7 @@ package io.github.mystery00.spw.navidrome.host;
 
 import java.lang.reflect.*;
 
-/** Steam 1.18.5 封面所有权与歌词发射器适配；仅由串行宿主线程调用。 */
+/** Steam 1.19.2 封面所有权与歌词发射器适配；仅由串行宿主线程调用。 */
 final class NativePresentation {
     @FunctionalInterface interface Current { boolean check() throws Exception; }
     private final ClassLoader loader;
@@ -43,7 +43,7 @@ final class NativePresentation {
         try {
             Class<?> document=type("com.xuncorp.spc.lyrics.\u0528");
             Object parsed=lyrics==null || lyrics.isBlank()?document.getMethod("\u052c").invoke(null)
-                    :type("androidx.compose.ui.\u1021").getMethod("\u037f",String.class).invoke(null,lyrics);
+                    :type(HostAbi1192.LYRICS_PARSER).getMethod("\u037f",String.class).invoke(null,lyrics);
             return new Prepared(owner,parsed);
         }catch(Exception|LinkageError e){if(owner!=null)((AutoCloseable)owner).close();throw e;}
     }

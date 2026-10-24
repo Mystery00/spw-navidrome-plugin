@@ -8,10 +8,11 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * 仅支持本机取证过的 Steam 1.18.5 ABI。调用者在专用串行宿主线程执行。
+ * 适配本机取证过的 Steam 1.19.2 ABI。
+ * 调用者在专用串行宿主线程执行。
  * 直接使用宿主 HttpRangeBassStream 的同一入口，不修改全局音乐视频音源注册表。
  */
-public final class Host1185 implements HostAdapter {
+public final class Host1192 implements HostAdapter {
     private final String version;
     private final ClassLoader loader;
     private Object controller,player,proxy,service;
@@ -37,16 +38,17 @@ public final class Host1185 implements HostAdapter {
     private final List<Slot> slots=new ArrayList<>();
     private final List<Object> ownedItems=new ArrayList<>();
     private record Slot(Object holder,Field field) { }
-    public Host1185(String version,ClassLoader loader) { this.version=version;this.loader=loader; }
+    public Host1192(String version,ClassLoader loader) { this.version=version;this.loader=loader; }
     private Class<?> type(String name) throws ClassNotFoundException { return Class.forName(name,false,loader); }
     @Override public void check() throws Exception {
-        if(!"1.18.5".equals(version)) throw new IllegalStateException("此构建仅适配 SPW Steam 1.18.5，当前为 "+version+"；请更新宿主适配层");
+        if(!"1.19.2".equals(version)) throw new IllegalStateException("此构建仅适配 SPW Steam 1.19.2，当前为 "+version+"；请更新宿主适配层");
+        HostAbi1192.verify(loader);
         itemType=type("com.xuncorp.pisces.PiscesMediaItem");
         itemConstructor=itemType.getConstructor(String.class,String.class,String.class,String.class,String.class,String.class);
         location=itemType.getMethod("\u052c");
         Class<?> ctrl=type("com.xuncorp.voxzen.service.PlaybackController");
         ctrl.getMethod("setPlaybackQueue",List.class,int.class);ctrl.getMethod("prepare");ctrl.getMethod("play");ctrl.getMethod("stop");
-        interceptorType=type("androidx.compose.ui.\u0c5a");
+        interceptorType=type(HostAbi1192.INTERCEPTOR);
         interceptorType.getMethod("createStream-_2kQ-ls",type("com.xuncorp.pisces.PlatformContext"),itemType,long.class,long.class,int.class,type("kotlin.coroutines.Continuation"));
         Class<?> range=type("com.xuncorp.voxzen.cast.HttpRangeBassStream"),ownerType=type("com.xuncorp.voxzen.cast.HttpRangeStreamOwner");
         create=range.getMethod("create-0E7RQCE",String.class,int.class,ownerType);
@@ -56,16 +58,17 @@ public final class Host1185 implements HostAdapter {
         Field serviceField=ctrl.getDeclaredField("service");serviceField.setAccessible(true);Object svc=serviceField.get(null);service=svc;
         player=svc.getClass().getMethod("getPlayer").invoke(svc);
         if(!player.getClass().getName().equals("com.xuncorp.pisces.\u0528")) throw new IllegalStateException("播放器类型已变化，请重新核对适配层");
-        currentItem=type("com.xuncorp.pisces.PiscesPlayer").getMethod("\u0786");
+        currentItem=type("com.xuncorp.pisces.PiscesPlayer").getMethod(HostAbi1192.CURRENT_ITEM);
         if(currentItem.getReturnType()!=itemType) throw new IllegalStateException("当前媒体签名不匹配");
-        // 两份列表分别用于解码取流与媒体分析；只替换已验证字段。
+        // 解码、媒体分析、格式探测各持有一份列表，只添加本插件拦截器。
         slots.clear();
-        Object props=field(player,"\u0528");Object opener=field(player,"\u0588");
+        Object props=field(player,"\u0528");Object opener=field(player,HostAbi1192.OPENER);
         slots.add(slot(props,"\u052f"));slots.add(slot(opener,"\u0529"));
+        slots.add(slot(field(player,HostAbi1192.FORMAT_PROBE),"\u052a"));
         for(Slot s:slots) {
             if(!(s.field.get(s.holder) instanceof List<?> list) || list.stream().anyMatch(x->!interceptorType.isInstance(x))) throw new IllegalStateException("宿主拦截器列表签名不匹配");
         }
-        System.out.println("[SPW Navidrome] Host ABI verified: Steam 1.18.5");
+        System.out.println("[SPW Navidrome] Host ABI verified: Steam 1.19.2");
     }
     private static Object field(Object o,String name) throws Exception { Field f=o.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(o); }
     private static Slot slot(Object o,String name) throws Exception {Field f=o.getClass().getDeclaredField(name);f.setAccessible(true);if(f.getType()!=List.class)throw new IllegalStateException("Invalid interceptor field");return new Slot(o,f);}

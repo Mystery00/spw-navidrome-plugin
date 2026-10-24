@@ -32,7 +32,7 @@ public final class AppSession implements AutoCloseable {
     public AppSession(HostAdapter host,Path cachePath) throws Exception {
         this.host=host;this.cache=new AudioCache(cachePath,512L*1024*1024);
         hostWorker.execute(()->{
-            try {host.check();compatibility="SPW 1.18.5 原生播放适配已就绪";}
+            try {host.check();compatibility="SPW 1.19.2 原生播放适配已就绪";}
             catch(Exception|LinkageError e) {compatibility="原生播放不可用："+safe(e);}
             notice(compatibility);
         });

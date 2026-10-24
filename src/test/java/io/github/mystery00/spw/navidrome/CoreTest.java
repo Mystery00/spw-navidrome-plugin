@@ -78,11 +78,11 @@ public final class CoreTest {
     }
     public static final class Holder { public java.util.List<Object> list; Holder(java.util.List<Object> list){this.list=list;} }
     private static void interceptorRemoval() throws Exception {
-        var adapter=new io.github.mystery00.spw.navidrome.host.Host1185("1.18.5",CoreTest.class.getClassLoader());
+        var adapter=new io.github.mystery00.spw.navidrome.host.Host1192("1.19.2",CoreTest.class.getClassLoader());
         Object ours=new Object(),other=new Object(),addedLater=new Object();Holder holder=new Holder(new java.util.ArrayList<>(java.util.List.of(other,ours,addedLater)));
         var proxy=adapter.getClass().getDeclaredField("proxy");proxy.setAccessible(true);proxy.set(adapter,ours);
         var slotsField=adapter.getClass().getDeclaredField("slots");slotsField.setAccessible(true);
-        Class<?> slot=Class.forName("io.github.mystery00.spw.navidrome.host.Host1185$Slot");var constructor=slot.getDeclaredConstructors()[0];constructor.setAccessible(true);
+        Class<?> slot=Class.forName("io.github.mystery00.spw.navidrome.host.Host1192$Slot");var constructor=slot.getDeclaredConstructors()[0];constructor.setAccessible(true);
         @SuppressWarnings("unchecked") var slots=(java.util.List<Object>)slotsField.get(adapter);
         slots.add(constructor.newInstance(holder,Holder.class.getField("list")));
         var remove=adapter.getClass().getDeclaredMethod("removeProxy");remove.setAccessible(true);remove.invoke(adapter);
@@ -142,7 +142,15 @@ public final class CoreTest {
             upstream.mode="bom";fetch(proxy.url("bom-error"),"GET",null,502);
             upstream.mode="truncate";
             String truncated=proxy.url("truncated");
-            try{fetch(truncated,"GET",null,200);}catch(java.io.IOException expected){}
+            // 上游可能在响应头发出前就断开，此时代理应返回 502；已发出头则终止 200 正文。
+            var broken=(java.net.HttpURLConnection)java.net.URI.create(truncated).toURL().openConnection();
+            broken.setReadTimeout(3000);
+            try {
+                int status=broken.getResponseCode();check(status==200||status==502,"Truncated stream must fail before or during response");
+                if(status==200)try(var body=broken.getInputStream()){
+                    check(body.readAllBytes().length<upstream.audio.length,"Truncated stream cannot look complete");
+                }catch(java.io.IOException expected){}
+            }finally{broken.disconnect();}
             Thread.sleep(100);
             check(cache.get(io.github.mystery00.spw.navidrome.stream.AudioCache.key(client.identity(),"truncated",null))==null,"Truncated response must not enter cache");
             upstream.mode="range";
