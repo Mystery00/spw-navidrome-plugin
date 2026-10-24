@@ -7,7 +7,7 @@
 ## 下载
 
 - [GitHub Releases](https://github.com/Mystery00/spw-navidrome-plugin/releases)：下载 `.spmod` 安装包。
-- [Steam 创意工坊](https://steamcommunity.com/app/3009140/workshop/)：条目待发布，届时补充直接订阅链接。
+- [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3826194199)：订阅后在 SPW 模组管理中启用。
 
 ## 功能与要求
 
@@ -20,7 +20,7 @@
 
 ## 快速开始
 
-1. 在 SPW「设置 → 创意工坊 → 模组管理」导入 `.spmod`，启用并授予「允许修改应用行为与界面」权限。
+1. 通过 Steam 创意工坊订阅，或在 SPW「设置 → 创意工坊 → 模组管理」导入 `.spmod`，启用并授予「允许修改应用行为与界面」权限。
 2. 从左侧「Navidrome」进入页面，也可打开模组「配置」。填写服务器根地址（如 `https://music.example.com/navidrome/`，不要追加 `/rest`）、用户名和密码，点击「连接并保存」。使用 HTTP 时需显式允许。
 3. 浏览或搜索歌曲，双击曲目、点击「播放全部」或选择后点击「播放选中」。暂停、切歌、拖动、封面和歌词均使用 SPW 原生播放页。
 
