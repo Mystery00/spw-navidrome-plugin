@@ -1,1 +1,1 @@
-{"configs":[{"title":"SPW Navidrome","config":"navidrome_settings.json","preferences":[]}]}
+{"configs":[{"title":"SPW Navidrome","config":"navidrome_settings.json","preferences":[{"type":"button","title":"Navidrome 页面未显示？","summary":"需要允许修改应用行为与界面，并使用 SPW Steam 1.19.2。点击查看说明。","arrow_type":"none","on_click":"vip.mystery0.spw.navidrome.NavidromePlugin.showConfigurationHelp"}]}]}

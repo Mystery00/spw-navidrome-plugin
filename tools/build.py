@@ -1,10 +1,34 @@
 """仅使用标准库编译、测试和打包；宿主字节码只作为编译输入。"""
-import argparse, hashlib, json, os, pathlib, subprocess, zipfile
+import argparse, hashlib, json, os, pathlib, re, subprocess, sys, zipfile
+from urllib.parse import urlsplit
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 def run(args):
     subprocess.run([str(x) for x in args], cwd=ROOT, check=True)
+
+def validate_metadata(meta):
+    """在编译前拒绝不完整清单、非法权限及换行注入。"""
+    for key in ('pluginId', 'version', 'mainClass'):
+        if not isinstance(meta.get(key), str) or not meta[key].strip():
+            raise ValueError(f'Required metadata missing: {key}')
+    for value in meta.values():
+        if isinstance(value, str) and any(c in value for c in '\r\n\0'):
+            raise ValueError('Metadata contains a forbidden control character')
+    for key in ('pluginId', 'mainClass'):
+        if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+', meta[key], re.ASCII):
+            raise ValueError(f'Invalid qualified name: {key}')
+    if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?', meta['version']):
+        raise ValueError('Version must use semantic version format')
+    permissions = meta.get('permissions', [])
+    allowed = {'key-bindings', 'library-read', 'library-write', 'class-transform'}
+    if (not isinstance(permissions, list) or any(not isinstance(p, str) or p not in allowed for p in permissions)
+            or len(permissions) != len(set(permissions))):
+        raise ValueError('Unsupported or duplicate plugin permissions')
+    if meta.get('openSourceUrl'):
+        url = urlsplit(meta['openSourceUrl'])
+        if url.scheme != 'https' or not url.hostname or url.username or url.password:
+            raise ValueError('Source URL must be public HTTPS without credentials')
 
 def main():
     p = argparse.ArgumentParser()
@@ -12,6 +36,9 @@ def main():
     p.add_argument('--host')
     p.add_argument('--test-only', action='store_true')
     args = p.parse_args()
+    run([sys.executable, ROOT/'tools/test_build.py'])
+    meta = json.loads((ROOT/'project.json').read_text(encoding='utf-8'))
+    validate_metadata(meta)
     # 宿主仍会解析原配置层，即使其上覆盖了自定义 Compose 页面。
     config = json.loads((ROOT/'src/main/resources/preference_config.json').read_text(encoding='utf-8'))
     for group in config['configs']:
@@ -49,24 +76,25 @@ def main():
     if cp: opts += ['-classpath', os.pathsep.join(map(str, cp))]
     argfile.write_text('\n'.join('"' + str(x).replace('\\', '/') + '"' for x in opts + sources), encoding='utf-8')
     run([pathlib.Path(args.jdk)/'bin/javac.exe', '@' + str(argfile)])
-    run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'io.github.mystery00.spw.navidrome.CoreTest'])
-    run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'io.github.mystery00.spw.navidrome.ui.ViewRequestTest'])
+    run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'vip.mystery0.spw.navidrome.CoreTest'])
+    run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'vip.mystery0.spw.navidrome.ui.ViewRequestTest'])
     if args.host:
         host = pathlib.Path(args.host) / 'app' / 'ffmpeg-x64.dll'
         test_cp = os.pathsep.join(map(str, [classes, host]))
-        run([pathlib.Path(args.jdk)/'bin/java.exe', '--enable-native-access=ALL-UNNAMED', '-ea', '-cp', test_cp, 'io.github.mystery00.spw.navidrome.credentials.CredentialStoreTest'])
+        run([pathlib.Path(args.jdk)/'bin/java.exe', '--enable-native-access=ALL-UNNAMED', '-ea', '-cp', test_cp, 'vip.mystery0.spw.navidrome.credentials.CredentialStoreTest'])
         if not args.test_only:
-            run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'io.github.mystery00.spw.navidrome.host.Host1192Test', host])
-            run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'io.github.mystery00.spw.navidrome.host.HostThemeAbiTest', host])
+            run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'vip.mystery0.spw.navidrome.host.Host1192Test', host])
+            run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'vip.mystery0.spw.navidrome.host.HostThemeAbiTest', host])
     else:
         print('DPAPI TEST SKIPPED: pass --host to provide the host JNA runtime.')
     if args.test_only: return
     # Gradle 统一编译 Java 与 Compose，宿主与依赖只用于编译。
     env = os.environ.copy(); env['JAVA_HOME'] = args.jdk; env['GRADLE_USER_HOME'] = str(ROOT/'.tools/gradle-home')
-    subprocess.run([str(ROOT/'gradlew.bat'), '--no-daemon', 'classes', 'nativeStateTest', 'nativeThemeTest'], cwd=ROOT, env=env, check=True)
+    subprocess.run([str(ROOT/'gradlew.bat'), '--no-daemon', f'-PspwHostJar={host}', 'classes', 'nativeStateTest', 'nativeThemeTest', 'permissionLifecycleTest'], cwd=ROOT, env=env, check=True)
     production_dirs = [build/'classes/java/main', build/'classes/kotlin/main']
-    meta = json.loads((ROOT/'project.json').read_text(encoding='utf-8'))
     manifest = {'Manifest-Version':'1.0', 'Plugin-Id':meta['pluginId'], 'Plugin-Version':meta['version'], 'Plugin-Class':meta['mainClass'], 'Plugin-Name':meta['name'], 'Plugin-Provider':meta['provider'], 'Plugin-Description':meta['description'], 'Plugin-Has-Config':'true', 'Plugin-Permissions':','.join(meta.get('permissions',[]))}
+    if meta.get('openSourceUrl'):
+        manifest['Plugin-Open-Source-Url'] = meta['openSourceUrl']
     # UTF-8 按字符折行，避免切断多字节字符。
     lines = []
     for k, v in manifest.items():
@@ -94,7 +122,7 @@ def main():
         assert 'classes/'+meta['mainClass'].replace('.', '/')+'.class' in z.namelist()
         assert not any(n.startswith(('classes/com/xuncorp/', 'classes/kotlin/', 'classes/androidx/', 'classes/org/pf4j/')) for n in z.namelist())
         assert not any('Test' in n or 'MockServer' in n for n in z.namelist())
-    # SPW 导入器只接受 ZIP/JAR 扩展名，提供内容相同的 ZIP。
+    # 官方发布使用 SPMOD；另附本机已验证可导入的同内容 ZIP。
     shutil.copyfile(target, target.with_suffix('.zip'))
     print('BUILD OK:', target)
     print('IMPORT ZIP:', target.with_suffix('.zip'))

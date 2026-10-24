@@ -1,10 +1,11 @@
 {
-  "pluginId": "io.github.mystery00.spw.navidrome",
-  "version": "0.3.4",
+  "pluginId": "vip.mystery0.spw.navidrome",
+  "version": "0.1.0",
   "name": "SPW Navidrome",
   "provider": "Mystery0",
+  "openSourceUrl": "https://github.com/Mystery00/spw-navidrome-plugin",
   "description": "浏览 Navidrome 并使用 SPW 原生播放",
-  "mainClass": "io.github.mystery00.spw.navidrome.NavidromePlugin",
+  "mainClass": "vip.mystery0.spw.navidrome.NavidromePlugin",
   "targetSpwVersion": "1.19.2",
   "permissions": [
     "class-transform"
