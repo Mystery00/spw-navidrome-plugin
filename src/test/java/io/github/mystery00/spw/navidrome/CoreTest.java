@@ -18,6 +18,32 @@ public final class CoreTest {
         interceptorRemoval();
         lyrics();
         nativeMetadata();
+        highResolutionCover();
+    }
+    /** 捕获缩略图请求和过小下载上限导致的原生大封面退化。 */
+    private static void highResolutionCover() throws Exception {
+        var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/rest/getCoverArt",exchange->{
+            String query=exchange.getRequestURI().getRawQuery();
+            var size=java.util.regex.Pattern.compile("(?:^|&)size=(\\d+)(?:&|$)").matcher(query);
+            int side=size.find()?Math.min(1024,Integer.parseInt(size.group(1))):1024;
+            var image=new java.awt.image.BufferedImage(side,side,java.awt.image.BufferedImage.TYPE_INT_RGB);
+            var random=new java.util.Random(42);
+            for(int y=0;y<side;y++)for(int x=0;x<side;x++)image.setRGB(x,y,random.nextInt());
+            var bytes=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"png",bytes);
+            exchange.getResponseHeaders().set("Content-Type","image/png");
+            exchange.sendResponseHeaders(200,bytes.size());
+            try(var out=exchange.getResponseBody()){bytes.writeTo(out);}
+        });
+        server.start();
+        try(var client=new io.github.mystery00.spw.navidrome.net.SubsonicClient(
+                "http://127.0.0.1:"+server.getAddress().getPort(),"a","b".toCharArray(),true)) {
+            byte[] bytes=client.cover("cover");
+            var image=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+            check(image.getWidth()==1024 && image.getHeight()==1024,"Native cover must retain 1024px source detail");
+            check(bytes.length>2*1024*1024,"Detailed PNG must survive old thumbnail byte limit");
+        }finally{server.stop(0);}
+        System.out.println("PASS high resolution cover download");
     }
     private static void nativeMetadata() throws Exception {
         var root=java.nio.file.Files.createTempDirectory("navidrome-metadata-test");

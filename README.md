@@ -2,7 +2,7 @@
 
 在 Salt Player for Windows 中浏览 Navidrome 专辑、搜索歌曲、查看歌单，并把列表交给 SPW 原生播放引擎。
 
-**当前状态：0.3.3 正在完成 SPW 1.19.2 原生页面迁移和实机验收。0.2.0 在 1.18.5 上已验证真实 Navidrome 0.64.2 登录、分页、MP3/FLAC 出声及原生封面、滚动歌词；这些历史结果不自动代表新版全部通过。** 详见 [验证记录](docs/VALIDATION.md)。
+**当前状态：0.3.4 正在完成 SPW 1.19.2 原生页面迁移和实机验收。0.2.0 在 1.18.5 上已验证真实 Navidrome 0.64.2 登录、分页、MP3/FLAC 出声及原生封面、滚动歌词；这些历史结果不自动代表新版全部通过。** 详见 [验证记录](docs/VALIDATION.md)。
 
 ## 环境与构建
 
@@ -14,7 +14,7 @@
 .\build.ps1 -HostHome 'H:\SteamLibrary\steamapps\common\Salt Player for Windows' -JdkHome 'D:\IdeaProjects\spw-navidrome-plugin\.tools\jdk25\jdk-25.0.4.1+1'
 ```
 
-换机器请调整目录，或设置 `SPW_HOME` 和 `JAVA_HOME`。产物为 `build/dist/plugin-io.github.mystery00.spw.navidrome-0.3.3.spmod` 及同内容 `.zip`。脚本先运行 Java 回归和真实 DPAPI 合成凭据测试，再编译原生页面并运行状态集成测试，最后检查包内不含宿主、Compose 或测试类。
+换机器请调整目录，或设置 `SPW_HOME` 和 `JAVA_HOME`。产物为 `build/dist/plugin-io.github.mystery00.spw.navidrome-0.3.4.spmod` 及同内容 `.zip`。脚本先运行 Java 回归和真实 DPAPI 合成凭据测试，再编译原生页面并运行状态集成测试，最后检查包内不含宿主、Compose 或测试类。
 
 仅运行 Java 回归（可使用 JDK 21，不编译 Compose；额外传入 `-HostHome` 才运行依赖宿主 JNA 的真实 DPAPI 测试）：
 
@@ -45,7 +45,7 @@
 - 缓存位于 `%LOCALAPPDATA%\SPW-Navidrome\audio-cache`；仅当前插件会话使用，退出账户、禁用、重启会清理。内嵌页面有清理入口。缓存键包含规范化服务器、用户名、字符串歌曲 ID、raw 格式、码率和区间。
 - 不写 SPW 的 Track/Playlist 数据库、不改全局搜索或导航。没有收藏、scrobble、离线同步和服务器歌单编辑。
 - 0.2.0 新增原生播放页封面与歌词接入。检测 `songLyrics` 能力后读取行级同步歌词并转换为 LRC；不支持扩展时回退标准 `getLyrics`，没有歌词时正常显示无歌词。不同语言选择服务器提供的首个同步版本，不合并翻译和逐字时间轴。已在真实 Navidrome 0.64.2 上观察到“玉生烟”“白狐”“舍得”的原生封面与歌词，并确认切歌后更新及“白狐”歌词随播放滚动。
-- 原生元数据只按需加载当前曲，最多内存保留 24 首（每首封面最多 2 MiB、歌词最多 256 KiB），切换账户清空。图片解码、歌词解析在后台；最终应用在宿主 Main 线程校验媒体实例、加载任务和会话代次后执行。
+- 原生元数据只按需加载当前曲，最多内存保留 24 首（每首封面最多 4 MiB、歌词最多 256 KiB），切换账户清空。图片解码、歌词解析在后台；最终应用在宿主 Main 线程校验媒体实例、加载任务和会话代次后执行。
 
 ## 升级、卸载和恢复
 

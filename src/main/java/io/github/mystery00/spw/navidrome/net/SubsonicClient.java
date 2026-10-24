@@ -109,12 +109,12 @@ public final class SubsonicClient implements AutoCloseable {
         return Json.objects(Json.object(request("search3",Map.of("query",query,"songCount","50","songOffset",Integer.toString(offset),"albumCount","0","artistCount","0")).get("searchResult3")).get("song")).stream().map(Models.Song::from).toList();
     }
     public byte[] cover(String id) throws IOException {
-        HttpURLConnection c = open("getCoverArt",Map.of("id",id,"size","256"),null);
+        HttpURLConnection c = open("getCoverArt",Map.of("id",id,"size","1024"),null);
         try {
             if (c.getResponseCode() != 200) throw httpError(c.getResponseCode());
             String type = c.getContentType();
             if (type == null || !type.toLowerCase(Locale.ROOT).startsWith("image/")) throw new ApiException("封面不可用");
-            try(InputStream in = c.getInputStream()) { return readBounded(in,2*1024*1024); }
+            try(InputStream in = c.getInputStream()) { return readBounded(in,4*1024*1024); }
         } finally { release(c); }
     }
     public String lyrics(Models.Song song) throws IOException {

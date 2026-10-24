@@ -66,7 +66,7 @@ public final class AppSession implements AutoCloseable {
                 synchronized(AppSession.this) {
                     if(closed || epoch.get()!=generation || !queueSongs.containsKey(url))return;
                     metadata.put(url,new NativeMetadata(cover,lyrics));
-                    // 每项封面最多 2 MiB、歌词最多 256 KiB，最多保留 24 首。
+                    // 每项封面最多 4 MiB、歌词最多 256 KiB，最多保留 24 首。
                     while(metadata.size()>24)metadata.remove(metadata.keySet().iterator().next());
                 }
             });

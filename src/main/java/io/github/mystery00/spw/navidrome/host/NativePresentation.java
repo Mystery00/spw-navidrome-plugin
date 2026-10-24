@@ -33,7 +33,7 @@ final class NativePresentation {
         if(cover!=null) {
             Class<?> util=type("com.xuncorp.voxzen.util.ImageBitmapUtil");
             Object image=util.getMethod("decodeToExactSize",byte[].class,int.class,int.class,boolean.class)
-                    .invoke(util.getField("INSTANCE").get(null),cover,512,512,false);
+                    .invoke(util.getField("INSTANCE").get(null),cover,1024,1024,false);
             if(image!=null) {
                 Object bitmap=type("androidx.compose.ui.graphics.SkiaImageAsset_skikoKt")
                         .getMethod("asSkiaBitmap",type("androidx.compose.ui.graphics.ImageBitmap")).invoke(null,image);
