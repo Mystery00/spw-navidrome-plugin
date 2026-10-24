@@ -72,4 +72,4 @@ git push origin v1.2.3
 
 [发布工作流](../.github/workflows/release.yml) 在 Windows runner 构建并上传产物，再在独立发布任务中创建 Release 草稿、上传 `.spmod`、公开 Release。仅发布任务有仓库写权限，使用内置 `GITHUB_TOKEN`，无需配置个人访问令牌。
 
-失败重跑可恢复草稿，已公开版本不会被覆盖；修复后发布新的 tag。GitHub Actions 不负责 Steam 创意工坊上传，后者使用相应 `.spmod` 手动发布。
+失败重跑可恢复草稿，已公开版本不会被覆盖；修复后发布新的 tag。GitHub Actions 不负责 Steam 创意工坊上传，后者使用相应 `.spmod` 及仓库内的工坊预览图（[16:9 横版](assets/workshop-preview-16x9.png)、[1:1 方版](assets/workshop-preview-1x1.png)）手动发布。
