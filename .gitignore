@@ -1,0 +1,7 @@
+.idea/
+.reference/
+.tools/
+build/
+.gradle/
+tools/.cache/
+*.log

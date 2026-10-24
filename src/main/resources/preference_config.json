@@ -1,0 +1,13 @@
+{
+  "configs": [{
+    "title": "SPW Navidrome",
+    "config": "navidrome_settings.json",
+    "preferences": [{
+      "type": "button",
+      "title": "打开 Navidrome 音乐库",
+      "summary": "配置服务器、浏览专辑、搜索歌曲和查看歌单；使用 SPW 原生播放。密码仅会话保存。",
+      "arrow_type": "arrow",
+      "on_click": "io.github.mystery00.spw.navidrome.NavidromePlugin.openLibrary"
+    }]
+  }]
+}

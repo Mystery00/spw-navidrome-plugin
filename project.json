@@ -1,0 +1,9 @@
+{
+  "pluginId": "io.github.mystery00.spw.navidrome",
+  "version": "0.2.0",
+  "name": "SPW Navidrome",
+  "provider": "Mystery0",
+  "description": "浏览 Navidrome 并使用 SPW 原生播放",
+  "mainClass": "io.github.mystery00.spw.navidrome.NavidromePlugin",
+  "targetSpwVersion": "1.18.5"
+}
