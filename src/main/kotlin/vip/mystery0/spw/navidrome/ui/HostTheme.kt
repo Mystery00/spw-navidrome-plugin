@@ -34,6 +34,15 @@ internal data class NativePalette(
 
     val warningBackground: Color
         get() = warning.copy(alpha = if (dark) .16f else .10f).compositeOver(surface)
+
+    val errorBackground: Color
+        get() = error.copy(alpha = if (dark) .16f else .10f).compositeOver(surface)
+
+    val successBackground: Color
+        get() = success.copy(alpha = if (dark) .16f else .10f).compositeOver(surface)
+
+    val subtleBorder: Color
+        get() = border.copy(alpha = if (dark) .45f else .60f).compositeOver(surface)
 }
 
 internal val LocalNativePalette =

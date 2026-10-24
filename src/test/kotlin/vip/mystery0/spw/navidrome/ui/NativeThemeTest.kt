@@ -39,7 +39,18 @@ object NativeThemeTest {
         check(dark.warningBackground != light.warningBackground) {
             "Warning background must follow host surface"
         }
-        check(light.selected.alpha == 1f && dark.selected.alpha == 1f) {
+        check(dark.errorBackground != light.errorBackground) {
+            "Error background must follow host surface"
+        }
+        check(dark.successBackground != light.successBackground) {
+            "Success background must follow host surface"
+        }
+        check(
+            light.selected.alpha == 1f &&
+                dark.selected.alpha == 1f &&
+                light.errorBackground.alpha == 1f &&
+                dark.successBackground.alpha == 1f,
+        ) {
             "Derived surfaces must remain opaque"
         }
         println("PASS host packed colors and theme-derived semantic surfaces")

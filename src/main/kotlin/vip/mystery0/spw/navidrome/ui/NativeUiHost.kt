@@ -1,6 +1,7 @@
 @file:OptIn(
     com.xuncorp.spw.workshop.api.UnstableSpwWorkshopApi::class,
     androidx.compose.runtime.InternalComposeApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
 )
 
 package vip.mystery0.spw.navidrome.ui
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -17,12 +19,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -141,11 +147,15 @@ private val blue: Color
     @Composable get() = LocalNativePalette.current.highlight
 private val line: Color
     @Composable get() = LocalNativePalette.current.border
+private val subtleLine: Color
+    @Composable get() = LocalNativePalette.current.subtleBorder
 private val surface: Color
     @Composable get() = LocalNativePalette.current.surface
 private val background: Color
     @Composable get() = LocalNativePalette.current.background
-private val rounded = RoundedCornerShape(8.dp)
+private val rounded = RoundedCornerShape(10.dp)
+private val controlShape = RoundedCornerShape(8.dp)
+private val pillShape = RoundedCornerShape(50)
 
 @Composable
 private fun Modifier.card() = clip(rounded).background(surface).border(1.dp, line, rounded)
@@ -157,6 +167,8 @@ private fun Label(
     color: Color = ink,
     size: Int = 14,
     bold: Boolean = false,
+    singleLine: Boolean = false,
+    align: TextAlign = TextAlign.Start,
 ) {
     BasicText(
         text,
@@ -166,10 +178,21 @@ private fun Label(
                 color = color,
                 fontSize = size.sp,
                 fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
+                textAlign = align,
             ),
-        maxLines = 2,
+        maxLines = if (singleLine) 1 else 2,
         overflow = TextOverflow.Ellipsis,
     )
+}
+
+@Composable
+private fun Badge(text: String, fg: Color, bg: Color) {
+    Box(
+        Modifier.clip(pillShape).background(bg).padding(horizontal = 10.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Label(text, color = fg, size = 12, bold = true, singleLine = true)
+    }
 }
 
 @Composable
@@ -177,17 +200,20 @@ private fun Action(
     text: String,
     enabled: Boolean = true,
     primary: Boolean = false,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Box(
-        Modifier.clip(rounded)
+        modifier
+            .heightIn(min = 36.dp)
+            .clip(controlShape)
             .background(
                 if (primary && enabled) blue
                 else if (enabled) surface else LocalNativePalette.current.disabled,
             )
-            .border(1.dp, if (primary && enabled) blue else line, rounded)
+            .border(1.dp, if (primary && enabled) blue else line, controlShape)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Label(
@@ -195,7 +221,26 @@ private fun Action(
             color =
                 if (!enabled) muted
                 else if (primary) LocalNativePalette.current.onHighlight else ink,
+            size = 13,
+            bold = primary,
+            singleLine = true,
         )
+    }
+}
+
+private fun Modifier.onEnterKey(enabled: Boolean, action: (() -> Unit)?): Modifier {
+    if (action == null) return this
+    return onPreviewKeyEvent { event ->
+        if (
+            enabled &&
+                event.type == KeyEventType.KeyDown &&
+                (event.key == Key.Enter || event.key == Key.NumPadEnter)
+        ) {
+            action()
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -203,104 +248,303 @@ private fun Action(
 private fun Field(
     label: String,
     value: String,
+    placeholder: String = "",
     secret: Boolean = false,
     enabled: Boolean = true,
+    onSubmit: (() -> Unit)? = null,
     onChange: (String) -> Unit,
 ) {
+    var focused by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Label(label, color = muted)
+        Label(label, color = muted, size = 12, singleLine = true)
         BasicTextField(
             value,
             onChange,
             Modifier.fillMaxWidth()
-                .clip(rounded)
+                .heightIn(min = 38.dp)
+                .onFocusChanged { focused = it.isFocused }
+                .onEnterKey(enabled, onSubmit)
+                .clip(controlShape)
                 .background(
                     if (enabled) LocalNativePalette.current.input
                     else LocalNativePalette.current.disabled,
                 )
-                .border(1.dp, line, rounded)
-                .padding(11.dp),
+                .border(1.dp, if (focused && enabled) blue else line, controlShape)
+                .padding(horizontal = 12.dp, vertical = 9.dp),
             enabled = enabled,
             singleLine = true,
             textStyle = TextStyle(color = if (enabled) ink else muted, fontSize = 14.sp),
             visualTransformation =
                 if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(blue),
+            cursorBrush = SolidColor(blue),
+            decorationBox = { innerTextField ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty() && placeholder.isNotEmpty()) {
+                        Label(placeholder, color = muted, size = 13, singleLine = true)
+                    }
+                    innerTextField()
+                }
+            },
         )
+    }
+}
+
+@Composable
+private fun SearchBar(s: NativeState, modifier: Modifier = Modifier) {
+    var focused by remember { mutableStateOf(false) }
+    val canSearch = s.connected && !s.busy
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicTextField(
+            s.query,
+            { s.query = it },
+            Modifier.weight(1f)
+                .height(36.dp)
+                .onFocusChanged { focused = it.isFocused }
+                .onEnterKey(canSearch) { s.search() }
+                .clip(controlShape)
+                .background(LocalNativePalette.current.input)
+                .border(1.dp, if (focused) blue else line, controlShape)
+                .padding(horizontal = 12.dp),
+            enabled = !s.busy,
+            singleLine = true,
+            textStyle = TextStyle(color = ink, fontSize = 13.sp),
+            cursorBrush = SolidColor(blue),
+            decorationBox = { innerTextField ->
+                Row(
+                    Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Label("⌕", color = if (focused) blue else muted, size = 14, singleLine = true)
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        if (s.query.isEmpty()) {
+                            Label(
+                                "搜索歌曲、艺术家或专辑（按 Enter 搜索）",
+                                color = muted,
+                                size = 13,
+                                singleLine = true,
+                            )
+                        }
+                        innerTextField()
+                    }
+                    if (s.query.isNotEmpty()) {
+                        Box(
+                            Modifier.size(20.dp).clip(CircleShape).clickable(enabled = !s.busy) {
+                                s.query = ""
+                            },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Label("×", color = muted, size = 14, singleLine = true)
+                        }
+                    }
+                }
+            },
+        )
+        Action("搜索", canSearch, primary = true) { s.search() }
+    }
+}
+
+@Composable
+private fun ModeTabs(s: NativeState) {
+    val enabled = s.connected && !s.busy
+    Row(
+        Modifier.height(36.dp)
+            .clip(controlShape)
+            .background(LocalNativePalette.current.input)
+            .border(1.dp, line, controlShape)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        @Composable
+        fun Tab(title: String, target: String) {
+            val active = s.mode == target
+            Box(
+                Modifier.fillMaxHeight()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (active) blue else Color.Transparent)
+                    .clickable(enabled = enabled) { s.browse(target) }
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Label(
+                    title,
+                    color =
+                        if (active) LocalNativePalette.current.onHighlight
+                        else if (enabled) ink else muted,
+                    size = 13,
+                    bold = active,
+                    singleLine = true,
+                )
+            }
+        }
+        Tab("专辑", "albums")
+        Tab("歌单", "playlists")
+        if (s.mode == "search") {
+            Box(
+                Modifier.fillMaxHeight()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(blue)
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Label(
+                    "搜索结果",
+                    color = LocalNativePalette.current.onHighlight,
+                    size = 13,
+                    bold = true,
+                    singleLine = true,
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun Account(s: NativeState, wide: Boolean) {
     var confirmForget by remember { mutableStateOf(false) }
+    val submitLogin: () -> Unit = {
+        if (!s.busy) {
+            confirmForget = false
+            s.login()
+        }
+    }
     Column(
         Modifier.fillMaxWidth().card().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Label("账户与连接", size = 16, bold = true)
-        Field("服务器地址 · https://music.example.com", s.address, enabled = !s.busy && !s.restoring) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Label("账户与服务器连接", size = 15, bold = true, singleLine = true)
+            Badge("DPAPI 加密保护", blue, LocalNativePalette.current.selected)
+        }
+        Field(
+            "服务器根地址（不要追加 /rest）",
+            s.address,
+            placeholder = "https://music.example.com",
+            enabled = !s.busy && !s.restoring,
+            onSubmit = submitLogin,
+        ) {
             s.address = it
         }
         if (wide)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.weight(1f)) {
-                    Field("用户名", s.username, enabled = !s.busy && !s.restoring) { s.username = it }
+                    Field(
+                        "用户名",
+                        s.username,
+                        placeholder = "输入 Navidrome 用户名",
+                        enabled = !s.busy && !s.restoring,
+                        onSubmit = submitLogin,
+                    ) {
+                        s.username = it
+                    }
                 }
                 Box(Modifier.weight(1f)) {
-                    Field("密码", s.password, true, enabled = !s.busy && !s.restoring) {
+                    Field(
+                        "密码",
+                        s.password,
+                        placeholder = if (s.connected) "留空则重新输入以更新凭据" else "输入登录密码",
+                        secret = true,
+                        enabled = !s.busy && !s.restoring,
+                        onSubmit = submitLogin,
+                    ) {
                         s.password = it
                     }
                 }
             }
         else {
-            Field("用户名", s.username, enabled = !s.busy && !s.restoring) { s.username = it }
-            Field("密码", s.password, true, enabled = !s.busy && !s.restoring) { s.password = it }
+            Field(
+                "用户名",
+                s.username,
+                placeholder = "输入 Navidrome 用户名",
+                enabled = !s.busy && !s.restoring,
+                onSubmit = submitLogin,
+            ) {
+                s.username = it
+            }
+            Field(
+                "密码",
+                s.password,
+                placeholder = if (s.connected) "留空则重新输入以更新凭据" else "输入登录密码",
+                secret = true,
+                enabled = !s.busy && !s.restoring,
+                onSubmit = submitLogin,
+            ) {
+                s.password = it
+            }
         }
         Row(
-            Modifier.toggleable(s.allowHttp, enabled = !s.busy, role = Role.Checkbox) {
-                    s.allowHttp = it
-                }
-                .padding(vertical = 4.dp),
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(
-                Modifier.size(18.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(if (s.allowHttp) blue else surface)
-                    .border(1.dp, if (s.allowHttp) blue else muted, RoundedCornerShape(4.dp)),
-                contentAlignment = Alignment.Center,
+            Row(
+                Modifier.clip(RoundedCornerShape(6.dp))
+                    .toggleable(s.allowHttp, enabled = !s.busy, role = Role.Checkbox) {
+                        s.allowHttp = it
+                    }
+                    .padding(vertical = 4.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (s.allowHttp) Label("✓", color = LocalNativePalette.current.onHighlight)
+                Box(
+                    Modifier.size(18.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (s.allowHttp) blue else surface)
+                        .border(1.dp, if (s.allowHttp) blue else muted, RoundedCornerShape(4.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (s.allowHttp)
+                        Label("✓", color = LocalNativePalette.current.onHighlight, size = 12)
+                }
+                Label("明确允许 HTTP（仅用于可信局域网）", size = 13)
             }
-            Label("明确允许 HTTP（仅用于可信局域网）")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Action("退出并忘记", enabled = !s.busy) { confirmForget = true }
+                Action(
+                    if (s.busy && !s.connected) "正在连接…" else "连接并保存",
+                    !s.busy,
+                    primary = true,
+                    onClick = submitLogin,
+                )
+            }
         }
         Label(
             s.credentialStatus,
             color = if (s.credentialError) LocalNativePalette.current.error else muted,
+            size = 12,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Action(if (s.busy && !s.connected) "正在连接…" else "连接并保存", !s.busy, primary = true) {
-                confirmForget = false
-                s.login()
-            }
-            Action("退出并忘记") { confirmForget = true }
-        }
         if (confirmForget)
-            Column(
+            Row(
                 Modifier.fillMaxWidth()
-                    .clip(rounded)
+                    .clip(controlShape)
                     .background(LocalNativePalette.current.warningBackground)
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .border(1.dp, LocalNativePalette.current.warning, controlShape)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Label("退出此账户并删除本设备保存的加密凭据？", color = LocalNativePalette.current.warning)
+                Label(
+                    "确认退出此账户并清除本设备保存的加密凭据？",
+                    Modifier.weight(1f),
+                    color = LocalNativePalette.current.warning,
+                    size = 13,
+                    bold = true,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Action("确认忘记") {
+                    Action("取消") { confirmForget = false }
+                    Action("确认忘记", primary = true) {
                         confirmForget = false
                         s.logout()
                     }
-                    Action("取消") { confirmForget = false }
                 }
             }
     }
@@ -309,240 +553,463 @@ private fun Account(s: NativeState, wide: Boolean) {
 @Composable
 private fun CollectionPanel(s: NativeState, modifier: Modifier) {
     Column(modifier.card()) {
-        Label(
-            if (s.mode == "playlists") "歌单" else "专辑",
-            Modifier.padding(16.dp),
-            size = 16,
-            bold = true,
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Label(
+                if (s.mode == "playlists") "歌单列表" else "专辑列表",
+                size = 15,
+                bold = true,
+                singleLine = true,
+            )
+            if (s.collections.isNotEmpty()) {
+                Badge(
+                    "${s.collections.size} 项",
+                    muted,
+                    LocalNativePalette.current.input,
+                )
+            }
+        }
         Box(Modifier.fillMaxWidth().height(1.dp).background(line))
         if (s.collections.isEmpty())
             Box(
-                Modifier.weight(1f).fillMaxWidth().padding(16.dp),
+                Modifier.weight(1f).fillMaxWidth().padding(20.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Label(
-                    if (s.busy) "正在加载…" else if (!s.connected) "连接服务器后查看音乐库" else "暂无结果",
-                    color = muted,
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Label(
+                        if (s.busy) "正在加载列表…" else if (!s.connected) "尚未连接服务器" else "暂无可用内容",
+                        color = ink,
+                        bold = true,
+                    )
+                    Label(
+                        if (s.busy) "请稍候，正在从 Navidrome 获取数据"
+                        else if (!s.connected) "完成上方账户连接后即可浏览专辑与歌单" else "当前分类下没有找到专辑或歌单",
+                        color = muted,
+                        size = 12,
+                    )
+                }
             }
         else
-            LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(6.dp)) {
+            LazyColumn(
+                Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 itemsIndexed(s.collections) { _, item ->
-                    Column(
+                    val active = s.selectedCollectionId == item.id()
+                    Row(
                         Modifier.fillMaxWidth()
-                            .clip(rounded)
+                            .clip(controlShape)
                             .background(
-                                if (s.selectedCollectionId == item.id())
-                                    LocalNativePalette.current.selected
-                                else surface,
+                                if (active) LocalNativePalette.current.selected
+                                else Color.Transparent,
                             )
                             .clickable(enabled = !s.busy) { s.open(item) }
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Label(
-                            item.name(),
-                            color = if (s.selectedCollectionId == item.id()) blue else ink,
+                        Box(
+                            Modifier.width(3.dp)
+                                .height(28.dp)
+                                .clip(pillShape)
+                                .background(if (active) blue else Color.Transparent),
                         )
-                        Label(
-                            listOf(item.artist(), "${item.count()} 首")
-                                .filter { it.isNotBlank() }
-                                .joinToString(" · "),
-                            color = muted,
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Label(
+                                item.name(),
+                                color = if (active) blue else ink,
+                                size = 14,
+                                bold = active,
+                                singleLine = true,
+                            )
+                            Label(
+                                item.artist().ifBlank { "未知艺术家" },
+                                color = muted,
+                                size = 12,
+                                singleLine = true,
+                            )
+                        }
+                        Badge(
+                            "${item.count()} 首",
+                            if (active) blue else muted,
+                            if (active) surface else LocalNativePalette.current.input,
                         )
                     }
                 }
             }
-        if (s.more && s.mode != "search")
-            Box(Modifier.padding(10.dp)) { Action("加载更多", !s.busy) { s.next() } }
+        if (s.more && s.mode != "search") {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(subtleLine))
+            Box(Modifier.fillMaxWidth().padding(8.dp)) {
+                Action("加载更多", !s.busy, modifier = Modifier.fillMaxWidth()) { s.next() }
+            }
+        }
     }
 }
 
 @Composable
 private fun SongPanel(s: NativeState, modifier: Modifier, wide: Boolean) {
     Column(modifier.card()) {
-        Column(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Label(s.selectionTitle, size = 16, bold = true)
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                Modifier.weight(1f).padding(end = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Label("${s.songs.size} 首歌曲", color = muted)
-                Action("播放选中", s.selected in s.songs.indices, primary = true) { s.play() }
+                Label(s.selectionTitle, size = 15, bold = true, singleLine = true)
+                Label(
+                    if (s.songs.isEmpty()) "选择专辑、歌单或搜索以查看曲目"
+                    else "共 ${s.songs.size} 首歌曲 · 双击曲目可直接播放",
+                    color = muted,
+                    size = 12,
+                    singleLine = true,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Action("播放全部", s.songs.isNotEmpty() && !s.busy) {
+                    if (s.songs.isNotEmpty()) {
+                        s.selected = 0
+                        s.play()
+                    }
+                }
+                Action("播放选中", s.selected in s.songs.indices && !s.busy, primary = true) {
+                    s.play()
+                }
             }
         }
         Row(
             Modifier.fillMaxWidth()
                 .background(LocalNativePalette.current.input)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .border(1.dp, subtleLine)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Label("#", Modifier.width(24.dp), color = muted)
-            Label("标题", Modifier.weight(1f), color = muted)
-            if (wide) Label("艺术家", Modifier.weight(.65f), color = muted)
-            Label("时长", Modifier.width(45.dp), color = muted)
+            Label("#", Modifier.width(28.dp), color = muted, size = 12, singleLine = true)
+            Label("标题", Modifier.weight(1.3f), color = muted, size = 12, singleLine = true)
+            if (wide) {
+                Label("艺术家", Modifier.weight(.75f), color = muted, size = 12, singleLine = true)
+                Label("专辑", Modifier.weight(.75f), color = muted, size = 12, singleLine = true)
+            }
+            Label(
+                "时长",
+                Modifier.width(48.dp),
+                color = muted,
+                size = 12,
+                singleLine = true,
+                align = TextAlign.End,
+            )
         }
         if (s.songs.isEmpty())
             Box(
-                Modifier.weight(1f).fillMaxWidth().padding(20.dp),
+                Modifier.weight(1f).fillMaxWidth().padding(24.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Label(
-                    if (s.busy) "正在加载歌曲…"
-                    else if (!s.connected) "连接后开始浏览你的音乐库"
-                    else if (s.mode == "search") "没有搜索结果，试试其他关键词"
-                    else if (s.selectedCollectionId.isNotEmpty()) "此列表暂无歌曲" else "在左侧选择专辑或歌单",
-                    color = muted,
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Label(
+                        if (s.busy) "正在加载歌曲…"
+                        else if (!s.connected) "等待连接音乐库"
+                        else if (s.mode == "search") "未找到匹配的歌曲"
+                        else if (s.selectedCollectionId.isNotEmpty()) "此列表暂无歌曲" else "尚未选择专辑或歌单",
+                        color = ink,
+                        bold = true,
+                    )
+                    Label(
+                        if (s.busy) "正在请求曲目详情，请稍候"
+                        else if (!s.connected) "连接 Navidrome 服务器后即可浏览并播放歌曲"
+                        else if (s.mode == "search") "请尝试更换关键词重新搜索"
+                        else if (s.selectedCollectionId.isNotEmpty()) "该集合中不包含可播放的音轨"
+                        else "从左侧列表点击任意专辑或歌单以加载曲目",
+                        color = muted,
+                        size = 12,
+                    )
+                }
             }
         else
-            LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(
+                Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+            ) {
                 itemsIndexed(s.songs) { index, song ->
+                    val active = s.selected == index
                     Row(
                         Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
                             .background(
-                                if (s.selected == index) LocalNativePalette.current.selected
-                                else surface,
+                                if (active) LocalNativePalette.current.selected
+                                else Color.Transparent,
                             )
-                            .clickable { s.selected = index }
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                            .combinedClickable(
+                                onClick = { s.selected = index },
+                                onDoubleClick = {
+                                    s.selected = index
+                                    s.play()
+                                },
+                            )
+                            .padding(horizontal = 8.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Label(
-                            "${index+1}",
-                            Modifier.width(24.dp),
-                            color = if (s.selected == index) blue else muted,
+                            if (active) "▶" else "${index + 1}",
+                            Modifier.width(28.dp),
+                            color = if (active) blue else muted,
+                            size = if (active) 12 else 13,
+                            bold = active,
+                            singleLine = true,
                         )
-                        Column(
-                            Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                        ) {
-                            Label(song.title(), color = if (s.selected == index) blue else ink)
+                        if (wide) {
                             Label(
-                                if (wide) song.album() else "${song.artist()} · ${song.album()}",
-                                color = muted,
+                                song.title(),
+                                Modifier.weight(1.3f),
+                                color = if (active) blue else ink,
+                                size = 14,
+                                bold = active,
+                                singleLine = true,
                             )
+                            Label(
+                                song.artist().ifBlank { "未知艺术家" },
+                                Modifier.weight(.75f),
+                                color = if (active) ink else muted,
+                                size = 13,
+                                singleLine = true,
+                            )
+                            Label(
+                                song.album().ifBlank { "未知专辑" },
+                                Modifier.weight(.75f),
+                                color = muted,
+                                size = 13,
+                                singleLine = true,
+                            )
+                        } else {
+                            Column(
+                                Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Label(
+                                    song.title(),
+                                    color = if (active) blue else ink,
+                                    size = 14,
+                                    bold = active,
+                                    singleLine = true,
+                                )
+                                Label(
+                                    listOf(song.artist(), song.album())
+                                        .filter { it.isNotBlank() }
+                                        .joinToString(" · "),
+                                    color = muted,
+                                    size = 12,
+                                    singleLine = true,
+                                )
+                            }
                         }
-                        if (wide) Label(song.artist(), Modifier.weight(.65f))
                         Label(
-                            "${song.durationMs()/60000}:${(song.durationMs()/1000%60).toString().padStart(2,'0')}",
-                            Modifier.width(45.dp),
-                            color = muted,
+                            "${song.durationMs() / 60000}:${(song.durationMs() / 1000 % 60).toString().padStart(2, '0')}",
+                            Modifier.width(48.dp),
+                            color = if (active) blue else muted,
+                            size = 12,
+                            singleLine = true,
+                            align = TextAlign.End,
                         )
                     }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(line))
+                    if (index < s.songs.lastIndex) {
+                        Box(
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = 8.dp)
+                                .height(1.dp)
+                                .background(subtleLine),
+                        )
+                    }
                 }
             }
-        if (s.mode == "search" && s.more)
-            Box(Modifier.padding(10.dp)) { Action("加载更多歌曲", !s.busy) { s.next() } }
+        if (s.mode == "search" && s.more) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(subtleLine))
+            Box(Modifier.fillMaxWidth().padding(8.dp)) {
+                Action("加载更多歌曲", !s.busy, modifier = Modifier.fillMaxWidth()) { s.next() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusBar(s: NativeState) {
+    val palette = LocalNativePalette.current
+    val bg =
+        if (s.error) palette.errorBackground else if (s.busy) palette.selected else palette.input
+    val fg = if (s.error) palette.error else if (s.busy) blue else muted
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(controlShape)
+            .background(bg)
+            .border(1.dp, if (s.error) palette.error else subtleLine, controlShape)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Label(
+                if (s.error) "!" else if (s.busy) "◌" else "●",
+                color = fg,
+                size = 12,
+                bold = true,
+                singleLine = true,
+            )
+            Label(
+                (if (s.busy && !s.status.startsWith("正在")) "正在处理 · " else "") + s.status,
+                color = fg,
+                size = 12,
+                singleLine = true,
+            )
+        }
+        Label(
+            "播放与歌词由 SPW 原生播放栏承载",
+            color = muted,
+            size = 12,
+            singleLine = true,
+        )
     }
 }
 
 @Composable
 private fun Page(s: NativeState) {
+    val palette = LocalNativePalette.current
     BoxWithConstraints(Modifier.fillMaxSize().background(background)) {
         val wide = maxWidth >= 720.dp
-        val bodyHeight =
-            (maxHeight - 380.dp - (if (s.showAccount) 330.dp else 0.dp)).coerceAtLeast(260.dp)
-        Column(
+        val viewportHeight = maxHeight
+        val compact = s.showAccount || !wide || viewportHeight < 560.dp
+        val scrollPanelHeight = (viewportHeight - 260.dp).coerceAtLeast(320.dp)
+        val scrollState = rememberScrollState()
+        val containerModifier =
             Modifier.fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .then(if (compact) Modifier.verticalScroll(scrollState) else Modifier)
                 .padding(horizontal = if (wide) 24.dp else 14.dp)
-                .padding(top = 20.dp, bottom = 100.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(top = 18.dp, bottom = 92.dp)
+        Column(
+            containerModifier,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // 顶部标题栏：连接状态徽章与快捷操作
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Label("Navidrome", size = 28, bold = true)
-                    Label(
-                        if (s.restoring) "正在恢复账号…" else if (s.connected) "● 已连接音乐库" else "尚未连接音乐库",
-                        color = if (s.connected) LocalNativePalette.current.success else muted,
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Label("Navidrome", size = 24, bold = true, singleLine = true)
+                    if (s.restoring) {
+                        Badge("正在恢复账号…", blue, palette.selected)
+                    } else if (s.connected) {
+                        Badge(
+                            "● 已连接" + (if (s.username.isNotBlank()) " · ${s.username}" else ""),
+                            palette.success,
+                            palette.successBackground,
+                        )
+                    } else {
+                        Badge("○ 未连接", muted, palette.input)
+                    }
+                    if (s.connected && !s.showAccount && s.address.isNotBlank() && wide) {
+                        Label(s.address, color = muted, size = 12, singleLine = true)
+                    }
                 }
-                Action(if (s.showAccount && s.connected) "收起账户" else "账户管理") {
-                    s.accountExpanded = !s.accountExpanded
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (s.connected) {
+                        Action("刷新", enabled = !s.busy) {
+                            if (s.mode == "search") s.search() else s.browse(s.mode)
+                        }
+                    }
+                    Action("清理缓存") { s.session.clearCache { s.status = it } }
+                    Action(
+                        if (s.showAccount && s.connected) "收起账户" else "账户管理",
+                        primary = !s.connected && !s.showAccount,
+                    ) {
+                        s.accountExpanded = !s.accountExpanded
+                    }
                 }
             }
             if (NativeUiHost.sidebarUnavailable) {
-                Label("主菜单入口不可用，仍可通过模组配置使用 Navidrome。", color = LocalNativePalette.current.warning)
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clip(controlShape)
+                        .background(palette.warningBackground)
+                        .border(1.dp, palette.warning, controlShape)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Label(
+                        "主菜单入口不可用，仍可通过模组配置使用 Navidrome。",
+                        color = palette.warning,
+                        size = 12,
+                        singleLine = true,
+                    )
+                }
             }
             if (s.showAccount) Account(s, wide)
             else if (s.connected && (s.credentialError || s.credentialStatus.startsWith("正在")))
                 Label(
                     s.credentialStatus,
-                    color = if (s.credentialError) LocalNativePalette.current.error else muted,
+                    color = if (s.credentialError) palette.error else muted,
+                    size = 12,
+                    singleLine = true,
                 )
-            if (wide)
+            // 导航切换与内联搜索栏对齐在同一水平高度
+            if (wide) {
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Action("专辑", s.connected && !s.busy, primary = s.mode == "albums") {
-                        s.browse("albums")
-                    }
-                    Action("歌单", s.connected && !s.busy, primary = s.mode == "playlists") {
-                        s.browse("playlists")
-                    }
-                    Box(Modifier.weight(1f)) { Field("搜索歌曲", s.query) { s.query = it } }
-                    Action("搜索", s.connected && !s.busy, primary = true) { s.search() }
+                    ModeTabs(s)
+                    SearchBar(s, Modifier.weight(1f))
                 }
-            else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Action("专辑", s.connected && !s.busy, primary = s.mode == "albums") {
-                        s.browse("albums")
-                    }
-                    Action("歌单", s.connected && !s.busy, primary = s.mode == "playlists") {
-                        s.browse("playlists")
-                    }
-                }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Box(Modifier.weight(1f)) { Field("搜索歌曲", s.query) { s.query = it } }
-                    Action("搜索", s.connected && !s.busy, primary = true) { s.search() }
-                }
+            } else {
+                ModeTabs(s)
+                SearchBar(s, Modifier.fillMaxWidth())
             }
-            Label(
-                (if (s.busy) "正在处理 · " else "") + s.status,
-                color =
-                    if (s.error) LocalNativePalette.current.error else if (s.busy) blue else muted,
-            )
-            if (wide)
+            StatusBar(s)
+            // 主浏览工作区：宽屏折叠账户时自适应撑满剩余高度，避免固定高度留白
+            if (wide) {
+                val rowModifier =
+                    if (compact) Modifier.fillMaxWidth().height(scrollPanelHeight)
+                    else Modifier.fillMaxWidth().weight(1f)
                 Row(
-                    Modifier.fillMaxWidth().height(bodyHeight),
+                    rowModifier,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (s.mode != "search") CollectionPanel(s, Modifier.weight(1f).fillMaxHeight())
+                    if (s.mode != "search") {
+                        CollectionPanel(s, Modifier.weight(1f).fillMaxHeight())
+                    }
                     SongPanel(
                         s,
-                        Modifier.weight(if (s.mode == "search") 1f else 2.4f).fillMaxHeight(),
+                        Modifier.weight(if (s.mode == "search") 1f else 2.3f).fillMaxHeight(),
                         true,
                     )
                 }
-            else {
-                if (s.mode != "search") CollectionPanel(s, Modifier.fillMaxWidth().height(180.dp))
-                SongPanel(s, Modifier.fillMaxWidth().height(340.dp), false)
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Label("播放由 SPW 原生播放栏控制", Modifier.weight(1f), color = muted)
-                Action("清理缓存") { s.session.clearCache { s.status = it } }
+            } else {
+                if (s.mode != "search") {
+                    CollectionPanel(s, Modifier.fillMaxWidth().height(210.dp))
+                }
+                SongPanel(s, Modifier.fillMaxWidth().height(360.dp), false)
             }
         }
     }
