@@ -5,7 +5,7 @@ import com.xuncorp.spw.workshop.api.SpwPlugin;
 import com.xuncorp.spw.workshop.api.WorkshopApi;
 import com.xuncorp.spw.workshop.api.PluginPermission;
 import com.xuncorp.spw.workshop.api.PluginPermissionDeniedException;
-import vip.mystery0.spw.navidrome.host.Host1192;
+import vip.mystery0.spw.navidrome.host.ReflectiveHost;
 import vip.mystery0.spw.navidrome.credentials.CredentialStore;
 import java.nio.file.Path;
 
@@ -36,7 +36,8 @@ public final class NavidromePlugin extends SpwPlugin {
             Path root = Path.of(data, "SPW-Navidrome");
             session =
                     new AppSession(
-                            new Host1192(context.getSpwVersion(), getClass().getClassLoader()),
+                            new ReflectiveHost(
+                                    context.getSpwVersion(), getClass().getClassLoader()),
                             root.resolve("audio-cache"));
             Class.forName("vip.mystery0.spw.navidrome.ui.NativeUiHost")
                     .getMethod("install", String.class, AppSession.class, CredentialStore.class)
@@ -75,7 +76,7 @@ public final class NavidromePlugin extends SpwPlugin {
     public static void showConfigurationHelp() {
         WorkshopApi.ui()
                 .toast(
-                        "Navidrome 页面需要“允许修改应用行为与界面”权限。请停用后重新启用并勾选；已授权仍无页面时，请确认使用 SPW Steam 1.19.2。",
+                        "Navidrome 页面需要“允许修改应用行为与界面”权限。请停用后重新启用并勾选；已授权仍无页面时，请检查宿主适配错误并反馈 SPW 版本。",
                         WorkshopApi.Ui.ToastType.Warning);
     }
 

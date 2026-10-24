@@ -2,7 +2,7 @@ package vip.mystery0.spw.navidrome.host;
 
 import java.lang.reflect.*;
 
-/** Steam 1.19.2 封面所有权与歌词发射器适配；仅由串行宿主线程调用。 */
+/** 动态解析封面所有权与歌词发射器；仅由串行宿主线程调用。 */
 final class NativePresentation {
     @FunctionalInterface
     interface Current {
@@ -15,6 +15,108 @@ final class NativePresentation {
     private final Class<?> ownerType, monitorType;
     private final Method sourceChanged, updateImage;
     private Object ours, ourDocument;
+    private final LyricsBindings lyrics;
+    private final Field emitterField;
+
+    private static final class LyricsBindings {
+        final Class<?> document;
+        final Method empty, parse, stop, set, refresh, update;
+
+        LyricsBindings(HostReflection reflection, Class<?> service) throws Exception {
+            document = reflection.type("com.xuncorp.spc.lyrics.LyricsDocument");
+            empty =
+                    HostReflection.uniqueMethod(
+                            document,
+                            m ->
+                                    Modifier.isStatic(m.getModifiers())
+                                            && m.getParameterCount() == 0
+                                            && m.getReturnType() == document,
+                            "empty lyrics document");
+            Class<?> parser = reflection.type("com.xuncorp.spc.lyrics.spl.SplDecoder");
+            parse =
+                    HostReflection.uniqueMethod(
+                            parser,
+                            m ->
+                                    Modifier.isStatic(m.getModifiers())
+                                            && java.util.Arrays.equals(
+                                                    m.getParameterTypes(),
+                                                    new Class<?>[] {String.class})
+                                            && m.getReturnType() == document,
+                            "lyrics parser");
+            Class<?> emitter = service.getDeclaredField("lyricsEmitter").getType();
+            set =
+                    HostReflection.uniqueMethod(
+                            emitter,
+                            m ->
+                                    !Modifier.isStatic(m.getModifiers())
+                                            && java.util.Arrays.equals(
+                                                    m.getParameterTypes(),
+                                                    new Class<?>[] {document})
+                                            && m.getReturnType() == void.class,
+                            "lyrics document setter");
+            ClassFile bytecode = reflection.classFile(emitter);
+            java.util.List<Method> stops = new java.util.ArrayList<>(),
+                    refreshes = new java.util.ArrayList<>();
+            var setterCalls =
+                    bytecode.method(set).instructions().stream()
+                            .filter(
+                                    i ->
+                                            i.opcode() == 183
+                                                    && i.member()
+                                                            .owner()
+                                                            .equals(
+                                                                    emitter.getName()
+                                                                            .replace('.', '/')))
+                            .map(ClassFile.Instruction::member)
+                            .toList();
+            var tick = HostBindings.only(setterCalls, "lyrics emitter update target");
+            for (Method method : emitter.getDeclaredMethods()) {
+                if (method.getReturnType() != void.class) continue;
+                var instructions = bytecode.method(method).instructions();
+                if (!Modifier.isStatic(method.getModifiers())
+                        && Modifier.isPublic(method.getModifiers())
+                        && method.getParameterCount() == 0
+                        && instructions.stream()
+                                .anyMatch(
+                                        i ->
+                                                i.member() != null
+                                                        && i.member()
+                                                                .owner()
+                                                                .equals(
+                                                                        "kotlinx/coroutines/Job$DefaultImpls")
+                                                        && i.member()
+                                                                .name()
+                                                                .equals("cancel$default")))
+                    stops.add(method);
+                if (Modifier.isStatic(method.getModifiers())
+                        && java.util.Arrays.equals(
+                                method.getParameterTypes(), new Class<?>[] {emitter})
+                        && instructions.stream().anyMatch(i -> tick.equals(i.member())))
+                    refreshes.add(method);
+            }
+            stop = HostBindings.only(stops, "lyrics emitter cancellation");
+            refresh = HostBindings.only(refreshes, "lyrics emitter refresh");
+            stop.setAccessible(true);
+            refresh.setAccessible(true);
+            Class<?> monitor = reflection.type("com.xuncorp.voxzen.service.PlaybackMonitor");
+            update = monitor.getMethod("updateLyricsDocument$Voxzen_composeApp", document);
+        }
+    }
+
+    static void verify(HostReflection reflection, Class<?> service) throws Exception {
+        new LyricsBindings(reflection, service);
+        Class<?> owner = reflection.type("com.xuncorp.voxzen.image.RefCountedImageBitmap");
+        owner.getConstructor(reflection.type("org.jetbrains.skia.Bitmap"));
+        reflection
+                .type("com.xuncorp.voxzen.util.ImageBitmapUtil")
+                .getMethod("decodeToExactSize", byte[].class, int.class, int.class, boolean.class);
+        reflection
+                .type("com.xuncorp.voxzen.service.PlaybackMonitorKt")
+                .getMethod(
+                        "updateImageBitmap",
+                        reflection.type("com.xuncorp.voxzen.service.PlaybackMonitor"),
+                        owner);
+    }
 
     final class Prepared implements AutoCloseable {
         Object owner;
@@ -36,6 +138,10 @@ final class NativePresentation {
     NativePresentation(ClassLoader loader, Object service) throws Exception {
         this.loader = loader;
         this.service = service;
+        lyrics =
+                new LyricsBindings(
+                        new HostReflection(loader, service.getClass()), service.getClass());
+        emitterField = field("lyricsEmitter");
         ownerType = type("com.xuncorp.voxzen.image.RefCountedImageBitmap");
         monitorType = type("com.xuncorp.voxzen.service.PlaybackMonitor");
         monitor = monitorType.getField("INSTANCE").get(null);
@@ -87,13 +193,10 @@ final class NativePresentation {
             }
         }
         try {
-            Class<?> document = type("com.xuncorp.spc.lyrics.\u0528");
             Object parsed =
                     lyrics == null || lyrics.isBlank()
-                            ? document.getMethod("\u052c").invoke(null)
-                            : type(HostAbi1192.LYRICS_PARSER)
-                                    .getMethod("\u037f", String.class)
-                                    .invoke(null, lyrics);
+                            ? this.lyrics.empty.invoke(null)
+                            : this.lyrics.parse.invoke(null, lyrics);
             return new Prepared(owner, parsed);
         } catch (Exception | LinkageError e) {
             if (owner != null) ((AutoCloseable) owner).close();
@@ -124,15 +227,11 @@ final class NativePresentation {
     }
 
     private void applyLyrics(Object parsed) throws Exception {
-        Class<?> document = type("com.xuncorp.spc.lyrics.\u0528");
-        Object emitter = field("lyricsEmitter").get(service);
-        Class<?> emitterType = emitter.getClass();
-        emitterType.getMethod("\u0528").invoke(emitter);
-        monitorType
-                .getMethod("updateLyricsDocument$Voxzen_composeApp", document)
-                .invoke(monitor, parsed);
-        emitterType.getMethod("\u037f", document).invoke(emitter, parsed);
-        emitterType.getMethod("\u037f", emitterType).invoke(null, emitter);
+        Object emitter = emitterField.get(service);
+        lyrics.stop.invoke(emitter);
+        lyrics.update.invoke(monitor, parsed);
+        lyrics.set.invoke(emitter, parsed);
+        lyrics.refresh.invoke(null, emitter);
     }
 
     void clearOwned() throws Exception {
@@ -148,8 +247,7 @@ final class NativePresentation {
         Object flow = monitorType.getMethod("getLyricsDocument").invoke(monitor);
         Object current =
                 type("kotlinx.coroutines.flow.StateFlow").getMethod("getValue").invoke(flow);
-        if (ourDocument != null && current == ourDocument)
-            applyLyrics(type("com.xuncorp.spc.lyrics.\u0528").getMethod("\u052c").invoke(null));
+        if (ourDocument != null && current == ourDocument) applyLyrics(lyrics.empty.invoke(null));
         ourDocument = null;
     }
 }

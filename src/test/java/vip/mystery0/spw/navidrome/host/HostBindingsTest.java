@@ -3,8 +3,8 @@ package vip.mystery0.spw.navidrome.host;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
 
-/** 对实际安装包做无初始化的 ABI 检查，不启动音频引擎。 */
-public final class Host1192Test {
+/** 对实际安装包做不启动播放服务的能力检查，不启动音频引擎。 */
+public final class HostBindingsTest {
     public static void main(String[] args) throws Exception {
         try (var loader =
                 new URLClassLoader(
@@ -12,12 +12,12 @@ public final class Host1192Test {
                         ClassLoader.getPlatformClassLoader())) {
             Class<?> verifier;
             try {
-                verifier = Class.forName("vip.mystery0.spw.navidrome.host.HostAbi1192");
+                verifier = Class.forName("vip.mystery0.spw.navidrome.host.HostBindings");
             } catch (ClassNotFoundException e) {
-                throw new AssertionError("SPW 1.19.2 ABI verifier missing");
+                throw new AssertionError("Dynamic host verifier missing");
             }
             verifier.getDeclaredMethod("verify", ClassLoader.class).invoke(null, loader);
-            System.out.println("HOST 1.19.2 ABI TEST OK");
+            System.out.println("PASS dynamic host bindings against supplied host");
         }
     }
 }

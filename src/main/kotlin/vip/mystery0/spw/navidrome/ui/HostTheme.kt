@@ -5,7 +5,9 @@ package vip.mystery0.spw.navidrome.ui
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import java.lang.reflect.Field
 import java.lang.reflect.Method
+import vip.mystery0.spw.navidrome.host.HostReflection
 
 /** 所有页面语义色来自当前宿主 SaltTheme；派生色在当前表面合成。 */
 internal data class NativePalette(
@@ -37,23 +39,36 @@ internal data class NativePalette(
 internal val LocalNativePalette =
     staticCompositionLocalOf<NativePalette> { error("Host theme is not available") }
 
-/** 宿主 1.19.2 实际 DLL 已核实的 SaltTheme ABI；不使用系统主题替代宿主选择。 */
+/** 按 Metadata 和合成实例解析 SaltTheme；不使用系统主题替代宿主选择。 */
 internal object HostTheme {
-    private val names = listOf("Ϳ", "Ԩ", "ԩ", "Ԫ", "ԫ", "Ԭ", "ԭ", "Ԯ", "ԯ", "ՠ", "ֈ")
+    private val names =
+        listOf(
+            "highlight",
+            "text",
+            "subText",
+            "background",
+            "subBackground",
+            "popup",
+            "stroke",
+            "onHighlight",
+            "success",
+            "warning",
+            "error",
+        )
 
     private class Reader(
         val configs: CompositionLocal<Any?>,
         val colors: CompositionLocal<Any?>,
         val dark: Method,
-        val lightColors: Method,
-        val darkColors: Method,
+        val lightColors: Field,
+        val darkColors: Field,
         val getters: List<Method>,
     ) {
         fun read(composer: Composer): NativePalette {
             val config = checkNotNull(composer.consume(configs))
             val dynamic = checkNotNull(composer.consume(colors))
             val isDark = dark.invoke(config) as Boolean
-            val palette = (if (isDark) darkColors else lightColors).invoke(dynamic)
+            val palette = (if (isDark) darkColors else lightColors).get(dynamic)
             val c = getters.map { colorFromPacked(it.invoke(palette) as Long) }
             return NativePalette(
                 isDark,
@@ -73,19 +88,40 @@ internal object HostTheme {
 
     private val reader: Reader by lazy {
         val loader = HostTheme::class.java.classLoader
-        val theme = Class.forName("androidx.compose.ui.ʶ", false, loader)
-        val configs = Class.forName("androidx.compose.ui.ˤ", false, loader)
-        val dynamic = Class.forName("androidx.compose.ui.ʴ", false, loader)
-        val colors = Class.forName("androidx.compose.ui.ʹ", false, loader)
-        @Suppress("UNCHECKED_CAST")
-        fun local(name: String) = theme.getMethod(name).invoke(null) as CompositionLocal<Any?>
+        val reflection = HostUiResolver.reflection(loader)
+        val configs = reflection.type("com.moriafly.salt.ui.SaltConfigs")
+        val dynamic = reflection.type("com.moriafly.salt.ui.SaltDynamicColors")
+        val colors = reflection.type("com.moriafly.salt.ui.SaltColors")
+        val locals = HostUiResolver.themeLocals(reflection, configs, dynamic)
+        val getters = HostUiResolver.longProperties(reflection, colors, names.toSet())
+        val constructor =
+            colors.declaredConstructors
+                .single {
+                    it.parameterCount == names.size &&
+                        it.parameterTypes.all { type -> type == Long::class.javaPrimitiveType }
+                }
+                .apply { isAccessible = true }
+        val light =
+            constructor.newInstance(*Array<Any>(names.size) { 0xffeeeeee00000000UL.toLong() })
+        val dark =
+            constructor.newInstance(*Array<Any>(names.size) { 0xff11111100000000UL.toLong() })
+        val fields =
+            HostUiResolver.referenceProperties(
+                reflection,
+                dynamic,
+                mapOf("light" to light, "dark" to dark),
+            )
         Reader(
-            local("Ϳ"),
-            local("Ԩ"),
-            configs.getMethod("Ϳ"),
-            dynamic.getMethod("Ϳ"),
-            dynamic.getMethod("Ԩ"),
-            names.map { colors.getMethod(it) },
+            locals.first,
+            locals.second,
+            HostReflection.uniqueMethod(
+                configs,
+                { it.parameterCount == 0 && it.returnType == Boolean::class.javaPrimitiveType },
+                "dark theme getter",
+            ),
+            fields.getValue("light"),
+            fields.getValue("dark"),
+            names.map(getters::getValue),
         )
     }
     private var reported = false

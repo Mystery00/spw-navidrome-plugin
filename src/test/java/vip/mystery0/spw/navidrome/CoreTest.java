@@ -29,6 +29,7 @@ public final class CoreTest {
         nativeMetadata();
         highResolutionCover();
         PlaybackReportingTest.run();
+        vip.mystery0.spw.navidrome.host.HostReflectionTest.run();
     }
 
     /** 捕获缩略图请求和过小下载上限导致的原生大封面退化。 */
@@ -205,7 +206,7 @@ public final class CoreTest {
 
     private static void interceptorRemoval() throws Exception {
         var adapter =
-                new vip.mystery0.spw.navidrome.host.Host1192(
+                new vip.mystery0.spw.navidrome.host.ReflectiveHost(
                         "1.19.2", CoreTest.class.getClassLoader());
         Object ours = new Object(), other = new Object(), addedLater = new Object();
         Holder holder =
@@ -215,7 +216,7 @@ public final class CoreTest {
         proxy.set(adapter, ours);
         var slotsField = adapter.getClass().getDeclaredField("slots");
         slotsField.setAccessible(true);
-        Class<?> slot = Class.forName("vip.mystery0.spw.navidrome.host.Host1192$Slot");
+        Class<?> slot = Class.forName("vip.mystery0.spw.navidrome.host.ReflectiveHost$Slot");
         var constructor = slot.getDeclaredConstructors()[0];
         constructor.setAccessible(true);
         @SuppressWarnings("unchecked")

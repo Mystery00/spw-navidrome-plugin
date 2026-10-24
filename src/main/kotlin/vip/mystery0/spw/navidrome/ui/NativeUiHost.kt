@@ -38,56 +38,67 @@ import vip.mystery0.spw.navidrome.credentials.CredentialStore
 object NativeUiHost {
     private var handle: HookHandle? = null
     private var state: NativeState? = null
+    private var sidebar: NativeSidebar? = null
+    private var configBinding: HostUiResolver.ConfigPage? = null
+    var sidebarUnavailable by mutableStateOf(false)
+        private set
 
     @JvmStatic
     fun install(version: String, session: AppSession, store: CredentialStore) {
-        check(version == "1.19.2") { "原生页面仅适配 SPW 1.19.2" }
         HostTheme.validate()
         val loader = NativeUiHost::class.java.classLoader
-        val owner = Class.forName("androidx.compose.ui.ɒ", false, loader)
-        val route = "com.xuncorp.voxzen.ui.navigation.ScreenRoute\$ModConfigContent"
-        val vm = "androidx.compose.ui.ȴ"
-        val original =
-            owner.getDeclaredMethod(
-                "Ϳ",
-                Class.forName(route, false, loader),
-                Class.forName(vm, false, loader),
-                Composer::class.java,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-            )
-        original.isAccessible = true
+        val reflection = HostUiResolver.reflection(loader)
+        val binding = HostUiResolver.configPage(reflection)
+        configBinding = binding
         try {
-            val caller =
-                "com.xuncorp.voxzen.ui.navigation.ComposableSingletons\$AppNavigation_desktopKt"
+            val target = binding.target
             handle =
                 WorkshopApi.hookRegistrar.afterComposable(
-                    owner.name,
-                    "Ϳ",
-                    caller,
-                    listOf(route, vm),
+                    target.declaringClass.name,
+                    target.name,
+                    binding.caller.name,
+                    target.parameterTypes.takeWhile { it != Composer::class.java }.map { it.name },
                     100,
                     Panel,
                 )
-            // 注册成功后再恢复凭据；注册拒绝不应触发登录请求。
+            // 配置页注册成功后再恢复凭据；侧栏失败不撤销配置页。
             state = NativeState(session, store)
         } catch (t: Throwable) {
-            handle?.unhook()
-            handle = null
-            state?.close()
-            state = null
+            uninstall()
             throw t
         }
+        sidebarUnavailable = false
+        try {
+            sidebar =
+                NativeSidebar(HostUiResolver.sidebar(reflection, NavidromePlugin.ID)) {
+                        sidebarUnavailable = true
+                    }
+                    .also { it.install() }
+        } catch (t: Throwable) {
+            sidebar?.close()
+            sidebar = null
+            sidebarUnavailable = true
+            System.err.println(
+                "[SPW Navidrome] Sidebar hook unavailable: " + t.javaClass.simpleName,
+            )
+        }
+        System.out.println("[SPW Navidrome] Native UI resolved for host " + version)
     }
 
     @JvmStatic
     fun uninstall() {
         try {
-            handle?.unhook()
+            sidebar?.close()
         } finally {
-            handle = null
-            state?.close()
-            state = null
+            sidebar = null
+            try {
+                handle?.unhook()
+            } finally {
+                handle = null
+                configBinding = null
+                state?.close()
+                state = null
+            }
         }
     }
 
@@ -96,13 +107,11 @@ object NativeUiHost {
         override fun Content(call: UiHookCall) {
             val args = call.arguments
             val route = args.getOrNull(0)
+            val binding = configBinding
             val id =
                 try {
-                    if (
-                        route?.javaClass?.name ==
-                            "com.xuncorp.voxzen.ui.navigation.ScreenRoute\$ModConfigContent"
-                    )
-                        route.javaClass.getMethod("getPluginId").invoke(route)
+                    if (route != null && binding?.route?.isInstance(route) == true)
+                        binding.pluginId.invoke(route)
                     else null
                 } catch (t: Exception) {
                     null
@@ -115,7 +124,7 @@ object NativeUiHost {
                 else
                     Box(Modifier.fillMaxSize().background(Color(0xff20242c)).padding(24.dp)) {
                         BasicText(
-                            "当前宿主主题不可用，无法显示 Navidrome 页面。请重启插件，并确认正在使用 SPW 1.19.2。",
+                            "当前宿主主题不可用，无法显示 Navidrome 页面。请重启插件或检查宿主兼容性。",
                             style = TextStyle(color = Color.White, fontSize = 16.sp),
                         )
                     }
@@ -456,14 +465,16 @@ private fun Page(s: NativeState) {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Label("Navidrome", size = 28, bold = true)
                     Label(
-                        if (s.restoring) "正在恢复账号…"
-                        else if (s.connected) "● 已连接音乐库 · SPW 1.19.2" else "尚未连接音乐库",
+                        if (s.restoring) "正在恢复账号…" else if (s.connected) "● 已连接音乐库" else "尚未连接音乐库",
                         color = if (s.connected) LocalNativePalette.current.success else muted,
                     )
                 }
                 Action(if (s.showAccount && s.connected) "收起账户" else "账户管理") {
                     s.accountExpanded = !s.accountExpanded
                 }
+            }
+            if (NativeUiHost.sidebarUnavailable) {
+                Label("主菜单入口不可用，仍可通过模组配置使用 Navidrome。", color = LocalNativePalette.current.warning)
             }
             if (s.showAccount) Account(s, wide)
             else if (s.connected && (s.credentialError || s.credentialStatus.startsWith("正在")))

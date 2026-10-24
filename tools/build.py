@@ -107,6 +107,8 @@ def main():
                 "credentialStoreTest",
                 "nativeStateTest",
                 "nativeThemeTest",
+                "metadataRenamingTest",
+                "hostUiResolverTest",
                 "permissionLifecycleTest",
             ],
             cwd=ROOT,
@@ -200,17 +202,7 @@ def main():
                     "-ea",
                     "-cp",
                     classes,
-                    "vip.mystery0.spw.navidrome.host.Host1192Test",
-                    host,
-                ]
-            )
-            run(
-                [
-                    pathlib.Path(args.jdk) / "bin/java.exe",
-                    "-ea",
-                    "-cp",
-                    classes,
-                    "vip.mystery0.spw.navidrome.host.HostThemeAbiTest",
+                    "vip.mystery0.spw.navidrome.host.HostBindingsTest",
                     host,
                 ]
             )
@@ -230,6 +222,9 @@ def main():
             "classes",
             "nativeStateTest",
             "nativeThemeTest",
+            "metadataRenamingTest",
+            "hostUiResolverTest",
+            "hostUiAbiTest",
             "permissionLifecycleTest",
         ],
         cwd=ROOT,

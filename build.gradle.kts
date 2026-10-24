@@ -18,6 +18,8 @@ kotlin {
 
 dependencies {
     compileOnly(kotlin("stdlib"))
+    // Metadata 解析使用宿主提供的反射运行时；独立测试补齐，不打入插件包。
+    testRuntimeOnly(kotlin("reflect"))
 
     if (providers.gradleProperty("standalone").orNull == "true") {
         // 使用官方多模块发布中的 API 模块，避免引入其 Gradle 插件。
@@ -84,4 +86,43 @@ tasks.register<JavaExec>("nativeThemeTest") {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("vip.mystery0.spw.navidrome.ui.NativeThemeTest")
     enableAssertions = true
+}
+
+// 只重命名合成测试类的 JVM 标识，保留 Metadata，以模拟宿主重新混淆。
+val remapMetadataFixture =
+    tasks.register<Exec>("remapMetadataFixture") {
+        dependsOn("testClasses")
+        commandLine(
+            "python",
+            "tools/remap_fixture.py",
+            "build/classes/kotlin/test",
+            "build/fixtures/metadata-renamed.jar",
+            "--prefix",
+            "vip/mystery0/spw/navidrome/host/fixtures/",
+        )
+    }
+
+tasks.register<JavaExec>("metadataRenamingTest") {
+    dependsOn(remapMetadataFixture)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("vip.mystery0.spw.navidrome.host.MetadataRenamingTest")
+    args("build/fixtures/metadata-renamed.jar")
+    enableAssertions = true
+}
+
+tasks.register<JavaExec>("hostUiResolverTest") {
+    dependsOn(remapMetadataFixture)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("vip.mystery0.spw.navidrome.ui.HostUiResolverTest")
+    args("build/fixtures/metadata-renamed.jar")
+    enableAssertions = true
+}
+
+tasks.register<JavaExec>("hostUiAbiTest") {
+    dependsOn("testClasses")
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("vip.mystery0.spw.navidrome.ui.HostUiAbiTest")
+    providers.gradleProperty("spwHostJar").orNull?.let { args(it) }
+    enableAssertions = true
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }

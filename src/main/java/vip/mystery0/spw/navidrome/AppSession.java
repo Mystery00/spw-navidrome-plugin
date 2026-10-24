@@ -54,7 +54,7 @@ public final class AppSession implements AutoCloseable {
                 () -> {
                     try {
                         host.check();
-                        compatibility = "SPW 1.19.2 原生播放适配已就绪";
+                        compatibility = "SPW 原生播放能力检查通过";
                     } catch (Exception | LinkageError e) {
                         compatibility = "原生播放不可用：" + safe(e);
                     }
