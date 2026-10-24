@@ -57,12 +57,13 @@ def main():
         run([pathlib.Path(args.jdk)/'bin/java.exe', '--enable-native-access=ALL-UNNAMED', '-ea', '-cp', test_cp, 'io.github.mystery00.spw.navidrome.credentials.CredentialStoreTest'])
         if not args.test_only:
             run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'io.github.mystery00.spw.navidrome.host.Host1192Test', host])
+            run([pathlib.Path(args.jdk)/'bin/java.exe', '-ea', '-cp', classes, 'io.github.mystery00.spw.navidrome.host.HostThemeAbiTest', host])
     else:
         print('DPAPI TEST SKIPPED: pass --host to provide the host JNA runtime.')
     if args.test_only: return
     # Gradle 统一编译 Java 与 Compose，宿主与依赖只用于编译。
     env = os.environ.copy(); env['JAVA_HOME'] = args.jdk; env['GRADLE_USER_HOME'] = str(ROOT/'.tools/gradle-home')
-    subprocess.run([str(ROOT/'gradlew.bat'), '--no-daemon', 'classes', 'nativeStateTest'], cwd=ROOT, env=env, check=True)
+    subprocess.run([str(ROOT/'gradlew.bat'), '--no-daemon', 'classes', 'nativeStateTest', 'nativeThemeTest'], cwd=ROOT, env=env, check=True)
     production_dirs = [build/'classes/java/main', build/'classes/kotlin/main']
     meta = json.loads((ROOT/'project.json').read_text(encoding='utf-8'))
     manifest = {'Manifest-Version':'1.0', 'Plugin-Id':meta['pluginId'], 'Plugin-Version':meta['version'], 'Plugin-Class':meta['mainClass'], 'Plugin-Name':meta['name'], 'Plugin-Provider':meta['provider'], 'Plugin-Description':meta['description'], 'Plugin-Has-Config':'true', 'Plugin-Permissions':','.join(meta.get('permissions',[]))}

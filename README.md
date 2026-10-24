@@ -2,7 +2,7 @@
 
 在 Salt Player for Windows 中浏览 Navidrome 专辑、搜索歌曲、查看歌单，并把列表交给 SPW 原生播放引擎。
 
-**当前状态：0.3.2 正在完成 SPW 1.19.2 原生页面迁移和实机验收。0.2.0 在 1.18.5 上已验证真实 Navidrome 0.64.2 登录、分页、MP3/FLAC 出声及原生封面、滚动歌词；这些历史结果不自动代表新版全部通过。** 详见 [验证记录](docs/VALIDATION.md)。
+**当前状态：0.3.3 正在完成 SPW 1.19.2 原生页面迁移和实机验收。0.2.0 在 1.18.5 上已验证真实 Navidrome 0.64.2 登录、分页、MP3/FLAC 出声及原生封面、滚动歌词；这些历史结果不自动代表新版全部通过。** 详见 [验证记录](docs/VALIDATION.md)。
 
 ## 环境与构建
 
@@ -14,7 +14,7 @@
 .\build.ps1 -HostHome 'H:\SteamLibrary\steamapps\common\Salt Player for Windows' -JdkHome 'D:\IdeaProjects\spw-navidrome-plugin\.tools\jdk25\jdk-25.0.4.1+1'
 ```
 
-换机器请调整目录，或设置 `SPW_HOME` 和 `JAVA_HOME`。产物为 `build/dist/plugin-io.github.mystery00.spw.navidrome-0.3.2.spmod` 及同内容 `.zip`。脚本先运行 Java 回归和真实 DPAPI 合成凭据测试，再编译原生页面并运行状态集成测试，最后检查包内不含宿主、Compose 或测试类。
+换机器请调整目录，或设置 `SPW_HOME` 和 `JAVA_HOME`。产物为 `build/dist/plugin-io.github.mystery00.spw.navidrome-0.3.3.spmod` 及同内容 `.zip`。脚本先运行 Java 回归和真实 DPAPI 合成凭据测试，再编译原生页面并运行状态集成测试，最后检查包内不含宿主、Compose 或测试类。
 
 仅运行 Java 回归（可使用 JDK 21，不编译 Compose；额外传入 `-HostHome` 才运行依赖宿主 JNA 的真实 DPAPI 测试）：
 

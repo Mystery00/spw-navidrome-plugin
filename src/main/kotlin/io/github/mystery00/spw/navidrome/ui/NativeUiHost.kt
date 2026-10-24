@@ -36,6 +36,7 @@ object NativeUiHost {
  private var state:NativeState?=null
  @JvmStatic fun install(version:String,session:AppSession,store:CredentialStore){
   check(version=="1.19.2"){"原生页面仅适配 SPW 1.19.2"}
+  HostTheme.validate()
   val loader=NativeUiHost::class.java.classLoader
   val owner=Class.forName("androidx.compose.ui.ɒ",false,loader)
   val route="com.xuncorp.voxzen.ui.navigation.ScreenRoute\$ModConfigContent"
@@ -56,31 +57,37 @@ object NativeUiHost {
    val route=args.getOrNull(0)
    val id=try {if(route?.javaClass?.name=="com.xuncorp.voxzen.ui.navigation.ScreenRoute\$ModConfigContent")route.javaClass.getMethod("getPluginId").invoke(route) else null}catch(t:Exception){null}
    val current=state
-   if(id==NavidromePlugin.ID && current!=null) Page(current)
+   if(id==NavidromePlugin.ID && current!=null){
+    val palette=HostTheme.read()
+    if(palette!=null)CompositionLocalProvider(LocalNativePalette provides palette){Page(current)}
+    else Box(Modifier.fillMaxSize().background(Color(0xff20242c)).padding(24.dp)){
+     BasicText("当前宿主主题不可用，无法显示 Navidrome 页面。请重启插件，并确认正在使用 SPW 1.19.2。",style=TextStyle(color=Color.White,fontSize=16.sp))
+    }
+   }
   }
  }
 }
-private val ink=Color(0xff182338)
-private val muted=Color(0xff67758b)
-private val blue=Color(0xff1764f5)
-private val line=Color(0xffe0e7ed)
-private val surface=Color.White
-private val background=Color(0xffeef3f5)
+private val ink:Color @Composable get()=LocalNativePalette.current.text
+private val muted:Color @Composable get()=LocalNativePalette.current.subText
+private val blue:Color @Composable get()=LocalNativePalette.current.highlight
+private val line:Color @Composable get()=LocalNativePalette.current.border
+private val surface:Color @Composable get()=LocalNativePalette.current.surface
+private val background:Color @Composable get()=LocalNativePalette.current.background
 private val rounded=RoundedCornerShape(8.dp)
-private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,rounded)
+@Composable private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,rounded)
 
 @Composable private fun Label(text:String,modifier:Modifier=Modifier,color:Color=ink,size:Int=14,bold:Boolean=false){
  BasicText(text,modifier,style=TextStyle(color=color,fontSize=size.sp,fontWeight=if(bold)FontWeight.SemiBold else FontWeight.Normal),maxLines=2,overflow=TextOverflow.Ellipsis)
 }
 @Composable private fun Action(text:String,enabled:Boolean=true,primary:Boolean=false,onClick:()->Unit){
- Box(Modifier.clip(rounded).background(if(primary&&enabled)blue else if(enabled)surface else Color(0xffe8edf1)).border(1.dp,if(primary&&enabled)blue else line,rounded).clickable(enabled=enabled,onClick=onClick).padding(horizontal=14.dp,vertical=10.dp),contentAlignment=Alignment.Center){
-  Label(text,color=if(!enabled)muted else if(primary)Color.White else ink)
+ Box(Modifier.clip(rounded).background(if(primary&&enabled)blue else if(enabled)surface else LocalNativePalette.current.disabled).border(1.dp,if(primary&&enabled)blue else line,rounded).clickable(enabled=enabled,onClick=onClick).padding(horizontal=14.dp,vertical=10.dp),contentAlignment=Alignment.Center){
+  Label(text,color=if(!enabled)muted else if(primary)LocalNativePalette.current.onHighlight else ink)
  }
 }
 @Composable private fun Field(label:String,value:String,secret:Boolean=false,enabled:Boolean=true,onChange:(String)->Unit){
  Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
   Label(label,color=muted)
-  BasicTextField(value,onChange,Modifier.fillMaxWidth().clip(rounded).background(Color(0xfff8fafc)).border(1.dp,line,rounded).padding(11.dp),enabled=enabled,singleLine=true,textStyle=TextStyle(color=ink,fontSize=14.sp),visualTransformation=if(secret)PasswordVisualTransformation()else VisualTransformation.None,cursorBrush=androidx.compose.ui.graphics.SolidColor(blue))
+  BasicTextField(value,onChange,Modifier.fillMaxWidth().clip(rounded).background(if(enabled)LocalNativePalette.current.input else LocalNativePalette.current.disabled).border(1.dp,line,rounded).padding(11.dp),enabled=enabled,singleLine=true,textStyle=TextStyle(color=if(enabled)ink else muted,fontSize=14.sp),visualTransformation=if(secret)PasswordVisualTransformation()else VisualTransformation.None,cursorBrush=androidx.compose.ui.graphics.SolidColor(blue))
  }
 }
 @Composable private fun Account(s:NativeState,wide:Boolean){
@@ -96,16 +103,16 @@ private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,r
    Field("密码",s.password,true,enabled=!s.busy&&!s.restoring){s.password=it}
   }
   Row(Modifier.toggleable(s.allowHttp,enabled=!s.busy,role=Role.Checkbox){s.allowHttp=it}.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
-   Box(Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)).background(if(s.allowHttp)blue else surface).border(1.dp,if(s.allowHttp)blue else muted,RoundedCornerShape(4.dp)),contentAlignment=Alignment.Center){if(s.allowHttp)Label("✓",color=Color.White)}
+   Box(Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)).background(if(s.allowHttp)blue else surface).border(1.dp,if(s.allowHttp)blue else muted,RoundedCornerShape(4.dp)),contentAlignment=Alignment.Center){if(s.allowHttp)Label("✓",color=LocalNativePalette.current.onHighlight)}
    Label("明确允许 HTTP（仅用于可信局域网）")
   }
-  Label(s.credentialStatus,color=if(s.credentialError)Color(0xffb43a37)else muted)
+  Label(s.credentialStatus,color=if(s.credentialError)LocalNativePalette.current.error else muted)
   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
    Action(if(s.busy&&!s.connected)"正在连接…" else "连接并保存",!s.busy,primary=true){confirmForget=false;s.login()}
    Action("退出并忘记"){confirmForget=true}
   }
-  if(confirmForget)Column(Modifier.fillMaxWidth().clip(rounded).background(Color(0xfffff4e8)).padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-   Label("退出此账户并删除本设备保存的加密凭据？",color=Color(0xff875523))
+  if(confirmForget)Column(Modifier.fillMaxWidth().clip(rounded).background(LocalNativePalette.current.warningBackground).padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+   Label("退出此账户并删除本设备保存的加密凭据？",color=LocalNativePalette.current.warning)
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
     Action("确认忘记"){confirmForget=false;s.logout()}
     Action("取消"){confirmForget=false}
@@ -120,7 +127,7 @@ private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,r
   if(s.collections.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().padding(16.dp),contentAlignment=Alignment.Center){Label(if(s.busy)"正在加载…"else if(!s.connected)"连接服务器后查看音乐库"else"暂无结果",color=muted)}
   else LazyColumn(Modifier.weight(1f).fillMaxWidth(),contentPadding=PaddingValues(6.dp)){
    itemsIndexed(s.collections){_,item ->
-    Column(Modifier.fillMaxWidth().clip(rounded).background(if(s.selectedCollectionId==item.id())Color(0xffdeebff)else surface).clickable(enabled=!s.busy){s.open(item)}.padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+    Column(Modifier.fillMaxWidth().clip(rounded).background(if(s.selectedCollectionId==item.id())LocalNativePalette.current.selected else surface).clickable(enabled=!s.busy){s.open(item)}.padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
      Label(item.name(),color=if(s.selectedCollectionId==item.id())blue else ink)
      Label(listOf(item.artist(),"${item.count()} 首").filter{it.isNotBlank()}.joinToString(" · "),color=muted)
     }
@@ -138,7 +145,7 @@ private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,r
     Action("播放选中",s.selected in s.songs.indices,primary=true){s.play()}
    }
   }
-  Row(Modifier.fillMaxWidth().background(Color(0xfff6f8fa)).padding(horizontal=12.dp,vertical=10.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){
+  Row(Modifier.fillMaxWidth().background(LocalNativePalette.current.input).padding(horizontal=12.dp,vertical=10.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){
    Label("#",Modifier.width(24.dp),color=muted)
    Label("标题",Modifier.weight(1f),color=muted)
    if(wide)Label("艺术家",Modifier.weight(.65f),color=muted)
@@ -148,7 +155,7 @@ private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,r
    Label(if(s.busy)"正在加载歌曲…"else if(!s.connected)"连接后开始浏览你的音乐库"else if(s.mode=="search")"没有搜索结果，试试其他关键词"else if(s.selectedCollectionId.isNotEmpty())"此列表暂无歌曲"else"在左侧选择专辑或歌单",color=muted)
   }else LazyColumn(Modifier.weight(1f).fillMaxWidth()){
    itemsIndexed(s.songs){index,song ->
-    Row(Modifier.fillMaxWidth().background(if(s.selected==index)Color(0xffdeebff)else surface).clickable{s.selected=index}.padding(horizontal=12.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){
+    Row(Modifier.fillMaxWidth().background(if(s.selected==index)LocalNativePalette.current.selected else surface).clickable{s.selected=index}.padding(horizontal=12.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){
      Label("${index+1}",Modifier.width(24.dp),color=if(s.selected==index)blue else muted)
      Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)){
       Label(song.title(),color=if(s.selected==index)blue else ink)
@@ -157,7 +164,7 @@ private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,r
      if(wide)Label(song.artist(),Modifier.weight(.65f))
      Label("${song.durationMs()/60000}:${(song.durationMs()/1000%60).toString().padStart(2,'0')}",Modifier.width(45.dp),color=muted)
     }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xfff0f3f6)))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(line))
    }
   }
   if(s.mode=="search"&&s.more)Box(Modifier.padding(10.dp)){Action("加载更多歌曲",!s.busy){s.next()}}
@@ -171,12 +178,12 @@ private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,r
    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically){
     Column(verticalArrangement=Arrangement.spacedBy(7.dp)){
      Label("Navidrome",size=28,bold=true)
-     Label(if(s.restoring)"正在恢复账号…"else if(s.connected)"● 已连接音乐库 · SPW 1.19.2"else"尚未连接音乐库",color=if(s.connected)Color(0xff278147)else muted)
+     Label(if(s.restoring)"正在恢复账号…"else if(s.connected)"● 已连接音乐库 · SPW 1.19.2"else"尚未连接音乐库",color=if(s.connected)LocalNativePalette.current.success else muted)
     }
     Action(if(s.showAccount&&s.connected)"收起账户" else "账户管理"){s.accountExpanded=!s.accountExpanded}
    }
    if(s.showAccount)Account(s,wide)
-   else if(s.connected&&(s.credentialError||s.credentialStatus.startsWith("正在")))Label(s.credentialStatus,color=if(s.credentialError)Color(0xffb43a37)else muted)
+   else if(s.connected&&(s.credentialError||s.credentialStatus.startsWith("正在")))Label(s.credentialStatus,color=if(s.credentialError)LocalNativePalette.current.error else muted)
    if(wide)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.Bottom){
     Action("专辑",s.connected&&!s.busy,primary=s.mode=="albums"){s.browse("albums")}
     Action("歌单",s.connected&&!s.busy,primary=s.mode=="playlists"){s.browse("playlists")}
@@ -192,7 +199,7 @@ private fun Modifier.card()=clip(rounded).background(surface).border(1.dp,line,r
      Action("搜索",s.connected&&!s.busy,primary=true){s.search()}
     }
    }
-   Label((if(s.busy)"正在处理 · "else"")+s.status,color=if(s.error)Color(0xffb43a37)else if(s.busy)blue else muted)
+   Label((if(s.busy)"正在处理 · "else"")+s.status,color=if(s.error)LocalNativePalette.current.error else if(s.busy)blue else muted)
    if(wide)Row(Modifier.fillMaxWidth().height(bodyHeight),horizontalArrangement=Arrangement.spacedBy(12.dp)){
     if(s.mode!="search")CollectionPanel(s,Modifier.weight(1f).fillMaxHeight())
     SongPanel(s,Modifier.weight(if(s.mode=="search")1f else 2.4f).fillMaxHeight(),true)

@@ -21,3 +21,11 @@ tasks.register<JavaExec>("nativeStateTest") {
  mainClass.set("io.github.mystery00.spw.navidrome.NativeStateTest")
  enableAssertions = true
 }
+
+// 宿主主题语义色的纯 JVM 回归。
+tasks.register<JavaExec>("nativeThemeTest") {
+ dependsOn("testClasses")
+ classpath = sourceSets.test.get().runtimeClasspath
+ mainClass.set("io.github.mystery00.spw.navidrome.ui.NativeThemeTest")
+ enableAssertions = true
+}
