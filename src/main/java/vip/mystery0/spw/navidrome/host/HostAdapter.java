@@ -16,6 +16,13 @@ public interface HostAdapter extends AutoCloseable {
         return null;
     }
 
+    record PlaybackSnapshot(
+            String location, Object incarnation, boolean playing, long positionMs) {}
+
+    default PlaybackSnapshot playbackSnapshot() throws Exception {
+        return null;
+    }
+
     default Object metadataRevision() throws Exception {
         return null;
     }

@@ -7,6 +7,9 @@ import java.util.*;
 
 /** 测试专用模块，绝不进入插件安装包。 */
 final class MockServer implements AutoCloseable {
+    final java.util.List<Map<String, String>> scrobbles =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+    volatile java.util.concurrent.CountDownLatch scrobbleGate;
     final HttpServer server;
     volatile String mode = "range";
     volatile String lastPath;
@@ -38,6 +41,18 @@ final class MockServer implements AutoCloseable {
                                             kv.length > 1 ? kv[1] : "", StandardCharsets.UTF_8));
                         }
                         query = q;
+                        if (lastPath.endsWith("/scrobble")) {
+                            scrobbles.add(Map.copyOf(q));
+                            var gate = scrobbleGate;
+                            if (gate != null) {
+                                try {
+                                    gate.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new java.io.IOException("Interrupted mock response", e);
+                                }
+                            }
+                        }
                         if (!lastPath.endsWith("/stream")) {
                             String result =
                                     mode.equals("auth")

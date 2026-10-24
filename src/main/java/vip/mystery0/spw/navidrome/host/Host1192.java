@@ -49,6 +49,8 @@ public final class Host1192 implements HostAdapter {
     private Class<?> itemType, interceptorType;
     private Constructor<?> itemConstructor;
     private Method location, currentItem, create, box;
+    private Method isPlaying, positionMs, playerState, sourceItem;
+    private Field playbackSource;
     private Object rangeFactory, owner;
     private volatile LoopbackServer streams;
     private volatile boolean closed;
@@ -110,6 +112,12 @@ public final class Host1192 implements HostAdapter {
         if (!player.getClass().getName().equals("com.xuncorp.pisces.\u0528"))
             throw new IllegalStateException("播放器类型已变化，请重新核对适配层");
         currentItem = type("com.xuncorp.pisces.PiscesPlayer").getMethod(HostAbi1192.CURRENT_ITEM);
+        isPlaying = player.getClass().getMethod(HostAbi1192.IS_PLAYING);
+        positionMs = player.getClass().getMethod(HostAbi1192.POSITION_MS);
+        playerState = player.getClass().getMethod(HostAbi1192.PLAYER_STATE);
+        playbackSource = player.getClass().getDeclaredField(HostAbi1192.PLAYBACK_SOURCE);
+        playbackSource.setAccessible(true);
+        sourceItem = type(HostAbi1192.SOURCE_TYPE).getMethod("\u037f");
         if (currentItem.getReturnType() != itemType) throw new IllegalStateException("当前媒体签名不匹配");
         // 解码、媒体分析、格式探测各持有一份列表，只添加本插件拦截器。
         slots.clear();
@@ -232,6 +240,21 @@ public final class Host1192 implements HostAdapter {
             if (job != null && !(Boolean) jobType.getMethod("isCompleted").invoke(job)) return null;
         }
         return url;
+    }
+
+    @Override
+    public PlaybackSnapshot playbackSnapshot() throws Exception {
+        if (closed || player == null || playbackSource == null) return null;
+        Object item = currentItem.invoke(player);
+        Object source = playbackSource.get(player);
+        if (item == null || source == null || sourceItem.invoke(source) != item) return null;
+        String url = (String) location.invoke(item);
+        boolean playing = (boolean) isPlaying.invoke(player);
+        long position = (long) positionMs.invoke(player);
+        String state = ((Enum<?>) playerState.invoke(player)).name();
+        if (item != currentItem.invoke(player) || source != playbackSource.get(player)) return null;
+        if (state.equals("Ended") || state.equals("Idle")) return null;
+        return new PlaybackSnapshot(url, source, playing && state.equals("Ready"), position);
     }
 
     @Override

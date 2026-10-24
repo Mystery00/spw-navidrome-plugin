@@ -182,6 +182,19 @@ public final class SubsonicClient implements AutoCloseable {
                 + Json.str(r, "version");
     }
 
+    /** time 使用本轮开始收听的 Unix 毫秒时间；submission=false 仅更新正在播放。 */
+    public void scrobble(String songId, long startedAtMs, boolean submission) throws IOException {
+        if (songId == null || songId.isBlank() || startedAtMs < 0) {
+            throw new IllegalArgumentException("Invalid playback report");
+        }
+        request(
+                "scrobble",
+                Map.of(
+                        "id", songId,
+                        "time", Long.toString(startedAtMs),
+                        "submission", Boolean.toString(submission)));
+    }
+
     public List<Models.Collection> albums(int offset) throws IOException {
         return Json.objects(
                         Json.object(

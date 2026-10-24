@@ -28,6 +28,7 @@ public final class CoreTest {
         lyrics();
         nativeMetadata();
         highResolutionCover();
+        PlaybackReportingTest.run();
     }
 
     /** 捕获缩略图请求和过小下载上限导致的原生大封面退化。 */

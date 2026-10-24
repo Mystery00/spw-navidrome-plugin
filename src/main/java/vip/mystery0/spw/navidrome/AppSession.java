@@ -3,6 +3,7 @@ package vip.mystery0.spw.navidrome;
 import vip.mystery0.spw.navidrome.host.HostAdapter;
 import vip.mystery0.spw.navidrome.model.Models.Song;
 import vip.mystery0.spw.navidrome.net.SubsonicClient;
+import vip.mystery0.spw.navidrome.playback.PlaybackTracker;
 import vip.mystery0.spw.navidrome.stream.*;
 import javax.swing.SwingUtilities;
 import java.nio.file.Path;
@@ -21,6 +22,17 @@ public final class AppSession implements AutoCloseable {
     private final ScheduledExecutorService hostWorker =
             Executors.newSingleThreadScheduledExecutor(r -> daemon(r, "navidrome-host"));
     private final Map<String, Song> queueSongs = new HashMap<>();
+    private final Map<String, Song> playbackSongs = new HashMap<>();
+    private final PlaybackTracker playbackTracker = new PlaybackTracker();
+    private final ThreadPoolExecutor reporting =
+            new ThreadPoolExecutor(
+                    1,
+                    1,
+                    0,
+                    TimeUnit.MILLISECONDS,
+                    new ArrayBlockingQueue<>(32),
+                    r -> daemon(r, "navidrome-reporting"));
+    private boolean reportingUnavailable, reportingWarning;
     private final LinkedHashMap<String, NativeMetadata> metadata =
             new LinkedHashMap<>(32, 0.75f, true);
 
@@ -49,6 +61,66 @@ public final class AppSession implements AutoCloseable {
                     notice(compatibility);
                 });
         hostWorker.scheduleWithFixedDelay(this::refreshMetadata, 500, 500, TimeUnit.MILLISECONDS);
+        hostWorker.scheduleWithFixedDelay(this::refreshPlayback, 500, 500, TimeUnit.MILLISECONDS);
+    }
+
+    /** 仅采样已提交的本会话歌曲；网络上报不会阻塞播放器或元数据线程。 */
+    private synchronized void refreshPlayback() {
+        if (closed || client == null || reportingUnavailable) return;
+        try {
+            HostAdapter.PlaybackSnapshot snapshot = host.playbackSnapshot();
+            if (snapshot == null) {
+                playbackTracker.suspend();
+                return;
+            }
+            Song song = playbackSongs.get(snapshot.location());
+            if (song == null) {
+                playbackTracker.reset();
+                return;
+            }
+            var reports =
+                    playbackTracker.sample(
+                            song.id(),
+                            snapshot.incarnation(),
+                            snapshot.playing(),
+                            snapshot.positionMs(),
+                            song.durationMs(),
+                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime()),
+                            System.currentTimeMillis());
+            SubsonicClient account = client;
+            long generation = epoch.get();
+            for (var report : reports) {
+                try {
+                    reporting.execute(
+                            () -> {
+                                if (closed || epoch.get() != generation || client != account)
+                                    return;
+                                try {
+                                    account.scrobble(
+                                            report.songId(),
+                                            report.startedAtMs(),
+                                            report.submission());
+                                } catch (Exception e) {
+                                    reportFailure(generation);
+                                }
+                            });
+                } catch (RejectedExecutionException e) {
+                    reportFailure(generation);
+                }
+            }
+        } catch (Exception | LinkageError e) {
+            reportingUnavailable = true;
+            playbackTracker.reset();
+            reportFailure(epoch.get());
+        }
+    }
+
+    private synchronized void reportFailure(long generation) {
+        if (closed || generation != epoch.get() || reportingWarning) return;
+        reportingWarning = true;
+        System.err.println(
+                "[SPW Navidrome] Playback reporting failed; audio playback is unaffected");
+        notice("播放记录上报失败，音频播放不受影响；本轮失败记录不会自动重试");
     }
 
     /** 只为当前曲目取元数据；下载不占宿主线程，账户失效后丢弃迟到结果。 */
@@ -202,6 +274,10 @@ public final class AppSession implements AutoCloseable {
     public synchronized void disconnect() {
         host.invalidateMetadata();
         queueSongs.clear();
+        playbackSongs.clear();
+        playbackTracker.reset();
+        reporting.getQueue().clear();
+        reportingUnavailable = reportingWarning = false;
         metadata.clear();
         metadataPublished = null;
         metadataObserved = null;
@@ -283,8 +359,14 @@ public final class AppSession implements AutoCloseable {
                         try {
                             host.play(snapshot, index, current.identity(), server);
                             queueSongs.clear();
+                            playbackSongs.clear();
+                            playbackTracker.reset();
+                            reportingUnavailable = false;
                             metadataPublished = null;
-                            for (Song song : snapshot) queueSongs.put(server.url(song.id()), song);
+                            for (Song song : snapshot) {
+                                queueSongs.put(server.url(song.id()), song);
+                                playbackSongs.put(server.url(song.id()), song);
+                            }
                             deliver(
                                     generation,
                                     () ->
@@ -326,6 +408,7 @@ public final class AppSession implements AutoCloseable {
         closed = true;
         disconnect();
         network.shutdownNow();
+        reporting.shutdownNow();
         hostWorker.execute(
                 () -> {
                     try {

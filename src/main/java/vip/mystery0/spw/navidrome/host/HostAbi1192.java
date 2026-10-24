@@ -7,6 +7,8 @@ import java.util.List;
 final class HostAbi1192 {
     static final String INTERCEPTOR = "androidx.compose.ui.\u09a3";
     static final String CURRENT_ITEM = "\u0788";
+    static final String IS_PLAYING = "\u0560", POSITION_MS = "\u058f", PLAYER_STATE = "\u078a";
+    static final String PLAYBACK_SOURCE = "\u052b", SOURCE_TYPE = "com.xuncorp.pisces.\u0787";
     static final String LYRICS_PARSER = "androidx.compose.ui.\u1054";
     static final String OPENER = "\u05ef", FORMAT_PROBE = "\u0782";
 
@@ -23,6 +25,17 @@ final class HostAbi1192 {
         Class<?> player = type(loader, "com.xuncorp.pisces.\u0528");
         if (player.getMethod(CURRENT_ITEM).getReturnType() != item)
             throw new NoSuchMethodException("Current media");
+        if (player.getMethod(IS_PLAYING).getReturnType() != boolean.class
+                || player.getMethod(POSITION_MS).getReturnType() != long.class
+                || player.getDeclaredField(PLAYBACK_SOURCE).getType() != type(loader, SOURCE_TYPE)
+                || type(loader, SOURCE_TYPE).getMethod("\u037f").getReturnType() != item) {
+            throw new NoSuchMethodException("Playback report snapshot");
+        }
+        Class<?> state = type(loader, "com.xuncorp.pisces.PiscesPlayer$State");
+        if (player.getMethod(PLAYER_STATE).getReturnType() != state
+                || !((Enum<?>) state.getField("\u052a").get(null)).name().equals("Ended")) {
+            throw new NoSuchMethodException("Playback state");
+        }
         Class<?> interceptor = type(loader, INTERCEPTOR);
         interceptor.getMethod(
                 "createStream-_2kQ-ls",
