@@ -28,6 +28,14 @@ python tools/build.py --standalone --jdk 'C:\Java\jdk-25'
 
 ## 按改动选择验证
 
+### 代码格式
+
+遵循根目录 `.editorconfig`：代码使用四空格缩进，JSON/YAML 使用两空格。展开密集的多语句代码、条件和异常处理；许可证与官方 Gradle Wrapper 保留上游格式。
+
+Java 使用 google-java-format 1.37.0 的 `--aosp` 风格；纯格式整理保留导入、修饰符顺序及字符串，不混入清理。Kotlin 和 Gradle Kotlin DSL 使用 ktfmt 0.65 的 `--kotlinlang-style --do-not-remove-unused-imports`；Python 使用 Black 26.10.0 默认风格。PowerShell 展开参数、管道和控制块，整理后用 PowerShell Parser 检查语法。格式工具仅用于开发，不加入插件运行依赖。
+
+### 验证范围
+
 | 改动 | 验证入口 |
 | --- | --- |
 | 文档 | 相对链接、命令与现有脚本一致性；无需重新编译产品。 |
