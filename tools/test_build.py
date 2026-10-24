@@ -1,9 +1,17 @@
 """发布元数据边界回归，不依赖本机宿主。"""
 import unittest
-from build import validate_metadata
+from build import validate_metadata, version_from_tag
 
 
 class MetadataTest(unittest.TestCase):
+    def test_release_tag(self):
+        self.assertEqual(version_from_tag('v1.2.3'), '1.2.3')
+        self.assertEqual(version_from_tag('v0.1.0'), '0.1.0')
+        for tag in ('1.2.3', 'v01.2.3', 'v1.2', 'v1.2.3-rc1', 'v1.2.3+build',
+                    'v1.2.3\n', 'v1.2.3/other', 'v１.2.3'):
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                version_from_tag(tag)
+
     def setUp(self):
         self.meta = dict(pluginId='vip.mystery0.spw.navidrome', version='0.1.0',
                          mainClass='vip.mystery0.spw.navidrome.NavidromePlugin',

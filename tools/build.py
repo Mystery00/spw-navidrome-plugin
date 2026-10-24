@@ -4,6 +4,12 @@ from urllib.parse import urlsplit
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
+def version_from_tag(tag):
+    """仅接受正式发布 tag，避免版本与文件路径混淆。"""
+    if not re.fullmatch(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', tag):
+        raise ValueError('Release tag must match vMAJOR.MINOR.PATCH without leading zeros')
+    return tag[1:]
+
 def run(args):
     subprocess.run([str(x) for x in args], cwd=ROOT, check=True)
 
@@ -35,9 +41,15 @@ def main():
     p.add_argument('--jdk', required=True)
     p.add_argument('--host')
     p.add_argument('--test-only', action='store_true')
+    p.add_argument('--standalone', action='store_true', help='Build with the public API, without an installed host')
+    p.add_argument('--tag', help='Use a release tag as the package version')
     args = p.parse_args()
+    if args.standalone and (args.host or args.test_only):
+        p.error('--standalone cannot be combined with --host or --test-only')
     run([sys.executable, ROOT/'tools/test_build.py'])
     meta = json.loads((ROOT/'project.json').read_text(encoding='utf-8'))
+    if args.tag:
+        meta['version'] = version_from_tag(args.tag)
     validate_metadata(meta)
     # 宿主仍会解析原配置层，即使其上覆盖了自定义 Compose 页面。
     config = json.loads((ROOT/'src/main/resources/preference_config.json').read_text(encoding='utf-8'))
@@ -50,6 +62,16 @@ def main():
                 raise SystemExit(f'Preference key required: {kind}')
     build = ROOT / 'build'
     build.mkdir(exist_ok=True)
+    if args.standalone:
+        env = os.environ.copy()
+        env['JAVA_HOME'] = args.jdk
+        subprocess.run([str(ROOT/'gradlew.bat'), '--no-daemon', '-Pstandalone=true',
+                        'clean', 'classes', 'coreTest', 'viewRequestTest', 'credentialStoreTest',
+                        'nativeStateTest', 'nativeThemeTest', 'permissionLifecycleTest'],
+                       cwd=ROOT, env=env, check=True)
+        package(meta)
+        print('HOST ABI TESTS SKIPPED: standalone build does not include SPW.')
+        return
     # 编译器输出只能清理工作区内固定路径。
     import shutil
     classes = build / 'test-classes'
@@ -91,6 +113,13 @@ def main():
     # Gradle 统一编译 Java 与 Compose，宿主与依赖只用于编译。
     env = os.environ.copy(); env['JAVA_HOME'] = args.jdk; env['GRADLE_USER_HOME'] = str(ROOT/'.tools/gradle-home')
     subprocess.run([str(ROOT/'gradlew.bat'), '--no-daemon', f'-PspwHostJar={host}', 'classes', 'nativeStateTest', 'nativeThemeTest', 'permissionLifecycleTest'], cwd=ROOT, env=env, check=True)
+    package(meta)
+
+
+def package(meta):
+    """本机与 CI 共用同一安装包格式和依赖隔离检查。"""
+    import shutil
+    build = ROOT / 'build'
     production_dirs = [build/'classes/java/main', build/'classes/kotlin/main']
     manifest = {'Manifest-Version':'1.0', 'Plugin-Id':meta['pluginId'], 'Plugin-Version':meta['version'], 'Plugin-Class':meta['mainClass'], 'Plugin-Name':meta['name'], 'Plugin-Provider':meta['provider'], 'Plugin-Description':meta['description'], 'Plugin-Has-Config':'true', 'Plugin-Permissions':','.join(meta.get('permissions',[]))}
     if meta.get('openSourceUrl'):
